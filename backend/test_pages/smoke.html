@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>SIH Agent Smoke Test</title>
+    <style>
+      body {
+        font-family: Georgia, serif;
+        max-width: 40rem;
+        margin: 3rem auto;
+        padding: 0 1rem;
+        line-height: 1.5;
+      }
+      label {
+        display: block;
+        margin: 0.75rem 0 0.25rem;
+      }
+      input,
+      button {
+        font: inherit;
+        padding: 0.4rem 0.6rem;
+      }
+      #status {
+        margin-top: 1rem;
+        color: #0a5;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Smoke test page</h1>
+    <p>Email for masking check: user@example.com</p>
+    <p>Card sample: 4111 1111 1111 1111</p>
+    <form id="demo-form" onsubmit="event.preventDefault(); document.getElementById('status').textContent='Submitted!';">
+      <label for="name">Name</label>
+      <input id="name" name="name" type="text" value="" />
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" value="secret@mail.test" />
+      <button id="submit" type="submit">Submit</button>
+    </form>
+    <p id="status"></p>
+  </body>
+</html>

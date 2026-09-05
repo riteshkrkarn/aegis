@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Browser AI Agent</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <p class="brand">SIH Agent</p>
+        <h1>Run a task</h1>
+        <p class="sub">Local PII mask → Markdown → server actions</p>
+      </header>
+
+      <label class="field" for="task">
+        <span>Task</span>
+        <textarea
+          id="task"
+          rows="4"
+          placeholder="e.g. Click the submit button"
+        ></textarea>
+      </label>
+
+      <button id="run" type="button">Run</button>
+      <pre id="status" class="status" aria-live="polite">Ready.</pre>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

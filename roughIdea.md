@@ -10,78 +10,88 @@ Build a browser-based AI agent (like **Comet by Perplexity**) that can complete 
 
 ---
 
-## Our Rough Plan
+## MVP Plan (Current)
 
-### 1. Session Tracker
-- Extension popup has a "History" page
-- Shows past tasks/sessions the agent has run — like browser history but for AI tasks
+### 1. Capture + Local PII Masking
+- Capture the page (screenshot for the local VLM)
+- Use a **Transformers.js VLM** to detect and mask sensitive data locally
+- Server never receives raw screen pixels
 
-### 2. The Agent (Brain)
-- Use **WebLLM** for planning + deciding what actions to take (click, fill, scroll, etc.)
-- This is what "thinks" — understands the user's request and figures out what needs to be done on the page
+### 2. DOM → Markdown
+- Convert the page DOM into clean Markdown after masking
+- Keeps context lightweight and easier for the server LLM to reason about
 
-### 3. DOM → Markdown
-- Instead of sending raw HTML/CSS/JS to the LLM, convert the page's DOM into a clean **Markdown** representation
-- Keeps it lightweight and easier for the LLM to reason about
+### 3. Server-Only Reasoning (MVP)
+- **All** tasks go to the **Python FastAPI** backend after local masking
+- Server uses an open-weight LLM via cloud API and returns JSON actions
+- Easy vs difficult / local vs server routing comes **later**
 
-### 4. Masking Before Sending
-- Before the markdown is sent anywhere (local LLM or server), sensitive parts (passwords, numbers, etc.) get masked
-- Masking is just part of doing the task safely — not the main point of the project
+### 4. Output = JSON Actions
+- Server responds with JSON describing actions (click, fill, scroll, etc.)
+- The Chrome extension executes them on the page
 
-### 5. Two Modes: Local vs Server
-- **Local:** if the task is light, the AI (WebLLM) handles everything on the user's machine
-- **Server:** if the task is heavy, it gets offloaded to a backend where a bigger model does the work
-
-### 6. Output = JSON Actions
-- Whether local or server, the model responds with a JSON object describing what action to take (e.g., click a button, fill a field)
-- The extension executes this on the page
+### 5. Chrome Only
+- MVP targets Chrome (MV3) only
+- `frontend/` is unused for now
 
 ---
 
-## Basic Flow (High Level)
+## Basic Flow (MVP)
 
 ```
 User gives a task
       ↓
-Agent looks at the page (DOM → Markdown)
+Capture page
       ↓
-Sensitive data gets masked
+Local Transformers.js VLM masks PII
       ↓
-Light task? → Local WebLLM decides & acts
-Heavy task? → Sent to server → server LLM decides
+DOM → Markdown
       ↓
-Get back JSON action(s)
+FastAPI server LLM decides
+      ↓
+JSON action(s)
       ↓
 Extension performs the action on the page
-      ↓
-Logged in session history
 ```
+
+---
+
+## Later (Not in MVP)
+
+### Session history UX
+- Popup opens a chatbot-style page with all past sessions
+- Not built in MVP (no history click-up yet)
+
+### Local vs server routing
+- Light tasks may run on local Transformers.js VLM
+- Heavy / agentic tasks stay on the FastAPI server
+- Criteria for easy vs difficult still TBD
+
+### Other
+- Firefox support
+- Separate `frontend/` web app
 
 ---
 
 ## Open Questions (To Figure Out As We Build)
 
-- What exactly gets tracked in session history?
-- What counts as "light" vs "heavy" task (how do we decide local vs server)?
-- Which open-source model(s) to use, both locally and server-side?
-- How exactly is masking done — regex? CV? Both?
-- What does the JSON action format look like exactly?
-- How do we handle multi-step tasks / errors?
-- What edge cases / test cases do we need to define, to check if the model is working correctly?
-- Which model is actually the optimal choice for this project (need to evaluate options)?
-- What's the business model / income side of this project?
-- What existing solutions are out there (e.g., Comet), and what can we improve on?
-- Any unique feature we can add to stand out?
+- What counts as "light" vs "heavy" when we add local routing?
+- Which Transformers.js VLM for masking (and later local reasoning)?
+- Which server-side open-weight model is optimal?
+- Exact JSON action schema and multi-step / error handling
+- What to store in session history when we add it
+- Edge cases / eval set for correctness
+- Differentiation vs existing agents (e.g. Comet)
 
 ---
 
-## Tech Direction (Not Finalized)
+## Tech Direction (MVP Locked)
 
-- **Extension:** Browser extension (Chrome/Firefox)
-- **Local AI:** WebLLM
-- **Server AI:** Some open-source LLM (TBD)
-- **Masking:** Computer vision + possibly pattern matching
+- **Extension:** Chrome MV3, TypeScript
+- **Local AI:** Transformers.js VLM (masking now; optional local reasoning later) — not WebLLM
+- **Server:** Python FastAPI + open-weight LLM via cloud API (e.g. Groq)
+- **Context:** Capture + VLM mask + DOM → Markdown
 
 ---
 
-*This is a rough working idea — details will evolve as we build and test.*
+*Details will evolve as we build and test.*
