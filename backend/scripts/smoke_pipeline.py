@@ -6,7 +6,7 @@ import sys
 
 import httpx
 
-API = "http://127.0.0.1:8000"
+API = "http://127.0.0.1:8001"
 
 
 def mask_pii(text: str) -> str:

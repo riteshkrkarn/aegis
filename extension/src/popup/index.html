@@ -3,28 +3,79 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Browser AI Agent</title>
+    <title>SIH Agent</title>
     <link rel="stylesheet" href="./popup.css" />
   </head>
   <body>
     <main class="shell">
-      <header>
-        <p class="brand">SIH Agent</p>
-        <h1>Run a task</h1>
-        <p class="sub">Local PII mask → Markdown → server actions</p>
+      <header class="topbar">
+        <div>
+          <p class="brand">SIH Agent</p>
+          <h1>Run a task</h1>
+          <p class="sub">Local PII mask → Markdown → server actions</p>
+        </div>
+        <button id="close" type="button" class="close-btn" title="Close panel">
+          Close
+        </button>
       </header>
+
+      <label class="field" for="model">
+        <span>Planner model</span>
+        <select id="model"></select>
+        <span id="model-hint" class="hint"></span>
+      </label>
 
       <label class="field" for="task">
         <span>Task</span>
         <textarea
           id="task"
-          rows="4"
+          rows="3"
           placeholder="e.g. Click the submit button"
         ></textarea>
       </label>
 
       <button id="run" type="button">Run</button>
-      <pre id="status" class="status" aria-live="polite">Ready.</pre>
+
+      <section id="progress" class="progress" aria-live="polite">
+        <div class="progress-head">
+          <span id="spinner" class="spinner" hidden aria-hidden="true"></span>
+          <div>
+            <p class="progress-title">Pipeline</p>
+            <p id="progress-label" class="progress-label">Waiting to start</p>
+          </div>
+        </div>
+        <div class="bar" aria-hidden="true">
+          <div id="progress-bar" class="bar-fill idle"></div>
+        </div>
+        <ol id="progress-steps" class="steps">
+          <li data-stage="capture">
+            <span class="step-name">Capture page</span>
+            <span class="step-state">Pending</span>
+          </li>
+          <li data-stage="markdown">
+            <span class="step-name">Read page</span>
+            <span class="step-state">Pending</span>
+          </li>
+          <li data-stage="model_download">
+            <span class="step-name">Load privacy model</span>
+            <span class="step-state">Pending</span>
+          </li>
+          <li data-stage="mask">
+            <span class="step-name">Mask sensitive data</span>
+            <span class="step-state">Pending</span>
+          </li>
+          <li data-stage="server">
+            <span class="step-name">Plan actions</span>
+            <span class="step-state">Pending</span>
+          </li>
+          <li data-stage="execute">
+            <span class="step-name">Run actions</span>
+            <span class="step-state">Pending</span>
+          </li>
+        </ol>
+      </section>
+
+      <p id="status" class="status" aria-live="polite">Ready.</p>
     </main>
     <script type="module" src="./main.ts"></script>
   </body>

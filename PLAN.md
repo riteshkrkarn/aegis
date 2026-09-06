@@ -1,59 +1,81 @@
-## Our Understanding
-A Chrome browser extension that acts as an intelligent agent. It captures the page, masks sensitive data locally with a Transformers.js VLM, converts the DOM to Markdown, then sends only sanitized context to the server. The server never sees raw screen data. The extension executes structured action commands returned by the server.
+## Final Product Vision
 
-- Client handles: page capture, PII detection/redaction (Transformers.js VLM), DOM → Markdown, action execution
-- Server handles: all task reasoning (MVP), returning action commands (click, scroll, fill)
+A Chrome browser extension that acts as a privacy-first AI agent (similar in spirit to Comet). It completes web tasks for the user — click, fill, scroll, navigate, extract — while keeping sensitive data off the wire.
 
-## MVP Flow
-Page is captured locally → Transformers.js VLM masks PII → HTML/DOM converted to Markdown → sanitized Markdown + user task sent to FastAPI server → server LLM returns structured JSON action(s) → extension executes them on the page.
+**End-state flow:**
+1. Capture the page (screenshot for vision)
+2. Local **Transformers.js VLM** masks PII (passwords, emails, cards, faces, etc.)
+3. Convert DOM → Markdown for fast, clean context
+4. Decide routing: light tasks → local VLM; heavy / agentic tasks → FastAPI server LLM
+5. Model returns structured JSON actions
+6. Extension executes actions on the page
+7. Sessions live in a chatbot-style history UI opened from the popup
+
+**Hard rule:** the server never sees raw screen pixels — only sanitized Markdown + the user task.
+
+**Stack (locked):**
+- Client: Chrome MV3, TypeScript, Transformers.js VLM (not WebLLM)
+- Server: Python FastAPI + open-weight LLM via cloud API (e.g. Groq)
+- `frontend/` reserved for a later web surface; unused now
+
+---
+
+## MVP slice (current target)
+
+For the first working product, **all** reasoning goes to the server after local masking. Local-vs-server routing and session history come after.
 
 ```
-User gives a task
-      ↓
-Capture page (screenshot for VLM)
-      ↓
-Local Transformers.js VLM masks PII
-      ↓
-DOM → Markdown (lightweight context)
-      ↓
-All tasks → FastAPI server LLM
-      ↓
-JSON action(s) returned
-      ↓
-Extension executes on the page
+User task
+  → Capture page
+  → Local PII mask (VLM; placeholder until model wired)
+  → DOM → Markdown
+  → FastAPI server LLM
+  → JSON action(s)
+  → Extension executes
 ```
 
-## Architecture
+---
 
-**Client side (Chrome MV3, TypeScript):**
-- Page capture via Chrome extension APIs
-- Local VLM via Transformers.js for PII masking (vision + language in one runtime)
-- DOM → Markdown conversion for faster, cleaner LLM context
-- Action executor for commands returned by the server
+## Status
 
-**Server side (Python FastAPI):**
-- Receives sanitized Markdown + task (never raw screenshots in the MVP contract)
-- Processes with an open-weight LLM via cloud API (e.g. Groq)
-- Returns structured actions like `{ "action": "click", "selector": "#submit" }`
-- Chosen for future agentic workflows
+### Done
+- [x] Product docs aligned to locked vision (`PLAN.md`, `roughIdea.md`, root `README.md`)
+- [x] Chrome MV3 TypeScript extension scaffold (Vite + CRXJS), popup with task input + Run
+- [x] Page capture (`chrome.tabs.captureVisibleTab`)
+- [x] DOM → Markdown converter (content script)
+- [x] PII mask **pipeline hook** with regex/placeholder redaction (Transformers.js dependency present; real VLM inference not wired yet)
+- [x] API client → `POST /agent/run` with sanitized markdown + task (no screenshot upload)
+- [x] Action executor (`click`, `fill`, `scroll`, `navigate`, `wait`)
+- [x] FastAPI backend: `/health`, `/agent/run`, CORS, Pydantic action schemas
+- [x] Groq LLM client + heuristic fallback when `GROQ_API_KEY` is missing
+- [x] Local smoke page + `scripts/smoke_pipeline.py`
+- [x] Chrome-only; `frontend/` left untouched
 
-## Tech Stack (MVP)
-Chrome Extension (MV3), TypeScript, Transformers.js (VLM), Canvas API, DOM APIs, Python FastAPI, open-weight LLM via cloud API (Groq)
+### Left
+- [x] Wire a real **Transformers.js VLM** for screenshot-aware PII masking (SmolVLM-256M in offscreen; regex fallback remains)
+- [ ] Harden JSON action schema, multi-step loops, and error recovery
+- [ ] Easy vs difficult **routing** (local VLM vs server) — criteria TBD
+- [ ] Session history UX: popup → chatbot-style page with all past sessions
+- [ ] Choose / evaluate optimal local VLM + server model
+- [ ] Richer agentic server workflows (tools, planning loops) on FastAPI
+- [ ] Eval set / edge-case suite for correctness
+- [ ] Optional `frontend/` web app
+- [ ] Firefox (if ever required)
 
-## Out of MVP / Later
-- Easy vs difficult routing: local VLM for light tasks vs server for heavy tasks (decision deferred)
-- Session history: popup opens a chatbot-style page listing all sessions
-- `frontend/` web app (folder left unused for now)
-- Firefox support
-- WebLLM is not used — Transformers.js VLMs cover vision and language locally when we add local reasoning later
+---
 
-## Feasibility
+## Architecture (reference)
 
-**What's proven:**
-- Running VLMs in browser via Transformers.js is established
-- Browser extensions can capture pages and manipulate DOM reliably
-- Open-weight LLMs are available via cloud APIs
-- FastAPI is a solid base for agentic server workflows
+**Client**
+- Capture, local VLM mask, DOM→MD, action execution
+- Later: local reasoning for light tasks via the same Transformers.js VLM runtime
 
-**Main challenge:**
-Balancing local VLM masking latency vs accuracy. Keep the local model small; MVP always offloads reasoning to the server after masking.
+**Server**
+- Receives sanitized Markdown + task only
+- Returns `{ "action": "click", "selector": "#submit" }`-style commands
+- FastAPI chosen for future agentic tooling
+
+## Feasibility notes
+- Transformers.js VLMs in-browser are proven but latency-sensitive — keep models small
+- MVP always offloads reasoning to the server after masking to ship sooner
+- Main challenge remains mask quality vs speed on-device

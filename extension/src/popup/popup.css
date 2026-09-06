@@ -17,7 +17,8 @@
 
 body {
   margin: 0;
-  width: 340px;
+  min-width: 360px;
+  min-height: 100vh;
   background:
     radial-gradient(ellipse at top left, #1d4a5a 0%, transparent 55%),
     linear-gradient(160deg, #0b151a, #12252d 60%, #0f1c24);
@@ -28,6 +29,30 @@ body {
   padding: 16px;
   display: grid;
   gap: 12px;
+}
+
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.close-btn {
+  flex: 0 0 auto;
+  border: 1px solid #2c4d59;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.close-btn:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent) 50%, #2c4d59);
 }
 
 .brand {
@@ -57,10 +82,33 @@ h1 {
   color: var(--muted);
 }
 
+.hint {
+  font-size: 11px;
+  color: #7f98a3;
+  line-height: 1.35;
+}
+
+select {
+  width: 100%;
+  border: 1px solid #2c4d59;
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  padding: 10px 12px;
+  font: inherit;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+select:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, white);
+  outline-offset: 1px;
+}
+
 textarea {
   width: 100%;
   resize: vertical;
-  min-height: 88px;
+  min-height: 72px;
   border: 1px solid #2c4d59;
   border-radius: var(--radius);
   background: var(--panel);
@@ -91,14 +139,166 @@ button:disabled {
   cursor: wait;
 }
 
+.progress {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel) 88%, black);
+  border: 1px solid #2c4d59;
+}
+
+.progress-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.progress-title {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.progress-label {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  margin-top: 4px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-top-color: var(--accent);
+  flex: 0 0 auto;
+  animation: spin 0.8s linear infinite;
+}
+
+.spinner[hidden] {
+  display: none;
+}
+
+.bar {
+  height: 6px;
+  border-radius: 999px;
+  background: #243f4a;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2aa876, var(--accent));
+  transition: width 0.25s ease;
+}
+
+.bar-fill.idle {
+  width: 0%;
+}
+
+.bar-fill.indeterminate {
+  width: 35%;
+  animation: indeterminate 1.2s ease-in-out infinite;
+}
+
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.steps li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: #6f8792;
+  padding: 6px 8px 6px 22px;
+  border-radius: 8px;
+  position: relative;
+  background: transparent;
+}
+
+.steps li::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: #3a5560;
+}
+
+.step-name {
+  min-width: 0;
+}
+
+.step-state {
+  flex: 0 0 auto;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: inherit;
+  opacity: 0.85;
+}
+
+.steps li.active {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.steps li.active::before {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.steps li.active .step-state {
+  color: var(--accent);
+}
+
+.steps li.done {
+  color: color-mix(in srgb, var(--accent) 75%, var(--muted));
+}
+
+.steps li.done::before {
+  background: var(--accent);
+}
+
+.steps li.failed {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.steps li.failed::before {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent);
+}
+
+.steps li.failed .step-state {
+  color: var(--danger);
+}
+
 .status {
   margin: 0;
-  min-height: 48px;
+  min-height: 40px;
   padding: 10px;
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--panel) 80%, black);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -109,4 +309,19 @@ button:disabled {
 
 .status.ok {
   color: var(--accent);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
 }

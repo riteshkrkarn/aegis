@@ -45,15 +45,15 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
-- Health: `http://127.0.0.1:8000/health`
-- Agent: `POST http://127.0.0.1:8000/agent/run`
+- Health: `http://127.0.0.1:8001/health`
+- Agent: `POST http://127.0.0.1:8001/agent/run`
 
-Optional: set `GROQ_API_KEY` in `backend/.env` for real LLM planning. Without it, a heuristic planner is used for local smoke tests.
+Optional: set `GROQ_API_KEY` in `backend/.env` for real LLM planning (`LLM_PROVIDER=groq`). Use `LLM_PROVIDER=nvidia` with `NVIDIA_API_KEY` for NVIDIA NIM. Without a matching key, a heuristic planner is used for local smoke tests.
 
-### 2. Extension
+### 2. Extension (build)
 
 ```bash
 cd extension
@@ -61,30 +61,48 @@ npm install
 npm run build
 ```
 
-1. Open `chrome://extensions`
-2. Enable **Developer mode**
-3. **Load unpacked** → select `extension/dist`
+This writes the loadable extension into `extension/dist`.
 
-### 3. Try it
+### 3. Run in Chrome (browser steps)
 
-1. Keep the API running on port `8000`
-2. Serve the smoke page (optional):
+1. **Start the backend** (if it is not already running) — see step 1. Confirm `http://127.0.0.1:8001/health` returns `{"status":"ok"}`.
+2. **(Optional) Start the smoke test page** in a second terminal:
 
    ```bash
    cd backend
    python -m http.server 8765 --directory test_pages
    ```
 
-3. Open `http://127.0.0.1:8765/smoke.html`
-4. Open the extension popup, enter e.g. `Click the submit button`, click **Run**
+3. **Load the extension in Chrome**
+   - Open a new tab and go to `chrome://extensions`
+   - Turn on **Developer mode** (top-right)
+   - Click **Load unpacked**
+   - Select the folder: `d:\Projects\SIH\extension\dist` (or your clone’s `extension/dist`)
+   - Confirm **SIH Browser AI Agent** appears and is enabled
+4. **Open a page to control**
+   - Smoke page: `http://127.0.0.1:8765/smoke.html`
+   - Or any normal `http(s)` website (avoid `chrome://` pages — content scripts do not run there)
+5. **Run a task**
+   - Click the extension icon in the toolbar (puzzle piece → pin **SIH Browser AI Agent** if needed)
+   - In the popup, type a task, e.g. `Click the submit button`
+   - Click **Run**
+   - Status text in the popup should show success; on the smoke page, **Submit** should be clicked / form status updated
+6. **After code changes**
+   - Run `npm run build` again in `extension/`
+   - On `chrome://extensions`, click the **Reload** icon on the extension card
+   - Refresh the tab you are testing, then run the task again
 
-API-only smoke (no Chrome):
+**Notes**
+- The popup talks to the page via the background + content script; the active tab must be the page you want controlled.
+- The extension calls `http://127.0.0.1:8001` — keep FastAPI on that host/port, or change `getApiBase()` in the extension and rebuild.
+- If **Run** fails with a connection error, the backend is down or blocked.
+
+### 4. API-only smoke (no browser)
 
 ```bash
 cd backend
 .\.venv\Scripts\python scripts\smoke_pipeline.py
 ```
-
 ## Tech stack
 
 - **Extension:** Chrome MV3, TypeScript, Vite, Transformers.js (VLM masking)

@@ -13,13 +13,18 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-Optional: set `GROQ_API_KEY` in `.env` for real LLM planning. Without it, a heuristic planner is used (enough for local smoke tests).
+In `.env`:
+- `GROQ_API_KEY` — used when `LLM_PROVIDER=groq` (default)
+- `NVIDIA_API_KEY` — used when `LLM_PROVIDER=nvidia` (NVIDIA NIM)
+- `LLM_PROVIDER=heuristic` — force offline fallback
+
+Without a matching key, a heuristic planner is used for local smoke tests.
 
 ## Run
 
 ```bash
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
-- Health: `GET http://127.0.0.1:8000/health`
-- Agent: `POST http://127.0.0.1:8000/agent/run`
+- Health: `GET http://127.0.0.1:8001/health`
+- Agent: `POST http://127.0.0.1:8001/agent/run`

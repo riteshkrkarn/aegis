@@ -5,6 +5,10 @@ import type { PipelineMessage } from '../lib/types'
 chrome.runtime.onMessage.addListener((message: PipelineMessage, _sender, sendResponse) => {
   ;(async () => {
     try {
+      if (message.type === 'PING') {
+        sendResponse({ ok: true })
+        return
+      }
       if (message.type === 'GET_MARKDOWN') {
         sendResponse({ markdown: documentToMarkdown(document) })
         return

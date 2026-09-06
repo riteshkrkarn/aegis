@@ -10,33 +10,20 @@ Build a browser-based AI agent (like **Comet by Perplexity**) that can complete 
 
 ---
 
-## MVP Plan (Current)
+## Final Product Vision
 
-### 1. Capture + Local PII Masking
-- Capture the page (screenshot for the local VLM)
-- Use a **Transformers.js VLM** to detect and mask sensitive data locally
-- Server never receives raw screen pixels
+A Chrome extension AI agent that:
 
-### 2. DOM → Markdown
-- Convert the page DOM into clean Markdown after masking
-- Keeps context lightweight and easier for the server LLM to reason about
+1. **Sees** the page (capture + DOM)
+2. **Masks** sensitive data locally with a **Transformers.js VLM** (vision + language; not WebLLM)
+3. **Compresses** context via DOM → Markdown
+4. **Thinks** — light tasks on-device (later), heavy/agentic tasks on a **Python FastAPI** server
+5. **Acts** via JSON commands the extension runs on the page
+6. **Remembers** via a chatbot-style session history opened from the popup (later)
 
-### 3. Server-Only Reasoning (MVP)
-- **All** tasks go to the **Python FastAPI** backend after local masking
-- Server uses an open-weight LLM via cloud API and returns JSON actions
-- Easy vs difficult / local vs server routing comes **later**
+Privacy invariant: raw screenshots never leave the machine; the server only gets sanitized Markdown + the task.
 
-### 4. Output = JSON Actions
-- Server responds with JSON describing actions (click, fill, scroll, etc.)
-- The Chrome extension executes them on the page
-
-### 5. Chrome Only
-- MVP targets Chrome (MV3) only
-- `frontend/` is unused for now
-
----
-
-## Basic Flow (MVP)
+### Target full flow
 
 ```
 User gives a task
@@ -47,51 +34,77 @@ Local Transformers.js VLM masks PII
       ↓
 DOM → Markdown
       ↓
-FastAPI server LLM decides
+Light? → local VLM    |    Heavy? → FastAPI server LLM
       ↓
 JSON action(s)
       ↓
-Extension performs the action on the page
+Extension executes on the page
+      ↓
+Logged in chatbot-style session history
 ```
 
 ---
 
-## Later (Not in MVP)
+## Status
 
-### Session history UX
-- Popup opens a chatbot-style page with all past sessions
-- Not built in MVP (no history click-up yet)
+### Done (MVP scaffold)
 
-### Local vs server routing
-- Light tasks may run on local Transformers.js VLM
-- Heavy / agentic tasks stay on the FastAPI server
-- Criteria for easy vs difficult still TBD
+| Area | Status |
+|------|--------|
+| Chrome MV3 + TypeScript extension, popup task UI | Done |
+| Page capture | Done |
+| DOM → Markdown | Done |
+| Pipeline: mask → API → execute actions | Done |
+| PII masking | **Partial** — regex/placeholder; real VLM not wired |
+| FastAPI `/agent/run` + action schemas | Done |
+| Groq client (optional) + heuristic fallback | Done |
+| Smoke test page + pipeline script | Done |
+| Docs / root README | Done |
+| Server-only reasoning after mask (MVP policy) | Done |
+| Chrome-only; `frontend/` unused | Done |
 
-### Other
-- Firefox support
-- Separate `frontend/` web app
+### Left
+
+| Area | Notes |
+|------|--------|
+| Real Transformers.js VLM masking | Replace placeholder with screenshot-aware redaction |
+| Local vs server routing | Decide light vs heavy; run light tasks on local VLM |
+| Multi-step agent loop + error handling | Retry, re-observe page, stop conditions |
+| Session history UX | Popup opens chatbot-style page with all sessions |
+| Model selection | Pick local VLM + server open-weight model |
+| Agentic server features | Deeper FastAPI tooling / planning |
+| Eval / edge cases | Correctness suite |
+| `frontend/` web app | Deferred |
+| Firefox | Deferred |
 
 ---
 
-## Open Questions (To Figure Out As We Build)
+## MVP vs full vision
 
-- What counts as "light" vs "heavy" when we add local routing?
+**MVP (what we ship first):** always mask locally → always reason on FastAPI → execute JSON actions. No history UI, no local task routing.
+
+**Full vision (after MVP):** same privacy pipeline, plus local VLM for easy tasks, server for hard/agentic work, and chatbot session history.
+
+---
+
+## Open questions
+
+- What counts as light vs heavy for routing?
 - Which Transformers.js VLM for masking (and later local reasoning)?
-- Which server-side open-weight model is optimal?
-- Exact JSON action schema and multi-step / error handling
-- What to store in session history when we add it
-- Edge cases / eval set for correctness
-- Differentiation vs existing agents (e.g. Comet)
+- Which server model is optimal under latency/cost?
+- Exact multi-step / failure semantics
+- What fields to store per session in history
+- How we differentiate from Comet and similar agents
 
 ---
 
-## Tech Direction (MVP Locked)
+## Tech direction (locked)
 
 - **Extension:** Chrome MV3, TypeScript
-- **Local AI:** Transformers.js VLM (masking now; optional local reasoning later) — not WebLLM
+- **Local AI:** Transformers.js VLM only (not WebLLM)
 - **Server:** Python FastAPI + open-weight LLM via cloud API (e.g. Groq)
-- **Context:** Capture + VLM mask + DOM → Markdown
+- **Context path:** Capture → VLM mask → DOM → Markdown → model → JSON actions
 
 ---
 
-*Details will evolve as we build and test.*
+*Vision is locked; remaining work is execution and polish on the items marked Left.*

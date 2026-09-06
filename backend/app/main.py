@@ -1,3 +1,5 @@
+import logging
+
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -5,6 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from .routes.agent import router as agent_router
 
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s [%(name)s] %(message)s',
+)
+logging.getLogger('sih').setLevel(logging.INFO)
 
 app = FastAPI(
     title='SIH Browser AI Agent',
