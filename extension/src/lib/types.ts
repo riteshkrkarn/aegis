@@ -56,6 +56,24 @@ export type PipelineProgressMessage = {
   percent?: number
 }
 
+export type MaskMethod = 'placeholder' | 'transformers-js-vlm'
+
+/** Demo audit: local before/after masking (raw never leaves the device). */
+export interface PrivacyAudit {
+  stepIndex: number
+  method: MaskMethod
+  beforeMarkdown: string
+  afterMarkdown: string
+  beforeChars: number
+  afterChars: number
+  truncated: boolean
+}
+
+export type PrivacyAuditMessage = {
+  type: 'PRIVACY_AUDIT'
+  audit: PrivacyAudit
+}
+
 export type PipelineMessage =
   | { type: 'RUN_TASK'; task: string; modelId?: string }
   | { type: 'PING' }
@@ -67,6 +85,9 @@ export type PipelineMessage =
       message: string
       actions?: AgentAction[]
       answer?: string
+      maskMethod?: MaskMethod
+      privacyAudit?: PrivacyAudit
     }
   | PipelineProgressMessage
+  | PrivacyAuditMessage
   | OffscreenFindPiiMessage

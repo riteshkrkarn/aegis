@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Aegis PII Demo — masking test cases</title>
+    <style>
+      body {
+        font-family: Georgia, serif;
+        max-width: 42rem;
+        margin: 2.5rem auto;
+        padding: 0 1rem 3rem;
+        line-height: 1.5;
+        color: #122;
+      }
+      h1 {
+        font-size: 1.6rem;
+      }
+      h2 {
+        margin-top: 1.75rem;
+        font-size: 1.15rem;
+        border-bottom: 1px solid #ccd;
+        padding-bottom: 0.25rem;
+      }
+      .case {
+        margin: 1rem 0;
+        padding: 0.75rem 1rem;
+        background: #f6f8fa;
+        border-left: 4px solid #3a7;
+      }
+      .case code {
+        font-family: Consolas, monospace;
+        font-size: 0.9em;
+      }
+      label {
+        display: block;
+        margin: 0.6rem 0 0.2rem;
+      }
+      input,
+      button {
+        font: inherit;
+        padding: 0.35rem 0.55rem;
+      }
+      .hint {
+        color: #456;
+        font-size: 0.92rem;
+      }
+      #status {
+        margin-top: 0.75rem;
+        color: #0a5;
+        min-height: 1.25em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>PII masking demo page</h1>
+    <p class="hint">
+      Open this page, run the extension, then compare
+      <strong>Privacy audit → Before / After</strong>. After should contain
+      <code>[REDACTED_*]</code> tokens. With <code>DEBUG=1</code>, the backend
+      log should match After.
+    </p>
+
+    <h2>Case A — Email (regex + VLM)</h2>
+    <div class="case">
+      <p>Contact: <strong>alice.privacy@example.com</strong></p>
+      <p>Also in form below as <code>secret@mail.test</code>.</p>
+      <p class="hint">Expect: <code>[REDACTED_EMAIL]</code></p>
+    </div>
+
+    <h2>Case B — Phone</h2>
+    <div class="case">
+      <p>Support line: <strong>+1 415-555-0198</strong></p>
+      <p>Alt: <strong>022-4567-8910</strong></p>
+      <p class="hint">Expect: <code>[REDACTED_PHONE]</code> (regex and/or VLM)</p>
+    </div>
+
+    <h2>Case C — Card number</h2>
+    <div class="case">
+      <p>Test Visa: <strong>4111 1111 1111 1111</strong></p>
+      <p>Compact: <strong>5500000000000004</strong></p>
+      <p class="hint">Expect: <code>[REDACTED_CARD]</code></p>
+    </div>
+
+    <h2>Case D — Password field text</h2>
+    <div class="case">
+      <p>Notes say: password: SuperSecret123!</p>
+      <p class="hint">Expect: <code>password: [REDACTED_PASSWORD]</code></p>
+    </div>
+
+    <h2>Case E — Name / address (VLM-first; regex may miss)</h2>
+    <div class="case">
+      <p>Patient: <strong>Priya Sharma</strong></p>
+      <p>Address: <strong>14 MG Road, Bengaluru 560001</strong></p>
+      <p class="hint">
+        Best on <strong>step 0</strong> with VLM. Regex alone often leaves these.
+        If Mask=regex only, names/addresses may still appear in After.
+      </p>
+    </div>
+
+    <h2>Case F — Should NOT redact (false-positive check)</h2>
+    <div class="case">
+      <p>Product price: <strong>₹34,999</strong></p>
+      <p>SKU count: <strong>113990</strong></p>
+      <p class="hint">Expect: prices/counts stay visible — not treated as phones.</p>
+    </div>
+
+    <h2>Interactive form</h2>
+    <form
+      id="demo-form"
+      onsubmit="event.preventDefault(); document.getElementById('status').textContent='Form submitted (local only).';"
+    >
+      <label for="name">Full name</label>
+      <input id="name" name="name" type="text" value="Priya Sharma" />
+
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" value="secret@mail.test" />
+
+      <label for="phone">Phone</label>
+      <input id="phone" name="phone" type="tel" value="+1 415-555-0198" />
+
+      <label for="card">Card</label>
+      <input id="card" name="card" type="text" value="4111 1111 1111 1111" />
+
+      <label for="pwd">Password</label>
+      <input id="pwd" name="password" type="password" value="SuperSecret123!" />
+
+      <p style="margin-top: 1rem">
+        <button id="submit" type="submit">Submit</button>
+      </p>
+    </form>
+    <p id="status"></p>
+
+    <h2>Suggested agent tasks</h2>
+    <ol>
+      <li><code>Summarize the contact details shown on this page.</code></li>
+      <li><code>What email and card number appear on the page?</code></li>
+      <li><code>Fill the name field with Test User and click Submit.</code></li>
+    </ol>
+  </body>
+</html>

@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import APIRouter, HTTPException
 
@@ -8,6 +9,10 @@ from ..schemas import AgentRunRequest, AgentRunResponse
 logger = logging.getLogger('sih.agent')
 
 router = APIRouter(prefix='/agent', tags=['agent'])
+
+
+def _debug_enabled() -> bool:
+    return os.getenv('DEBUG', '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 @router.post('/run', response_model=AgentRunResponse)
@@ -21,6 +26,12 @@ async def run_agent(payload: AgentRunRequest) -> AgentRunResponse:
         len(payload.page_markdown or ''),
         len(payload.prior_results or []),
     )
+    if _debug_enabled():
+        # Demo logger: show exactly what arrived after client-side masking.
+        logger.info(
+            'agent.run DEBUG page_markdown (post-mask, received):\n%s',
+            payload.page_markdown or '',
+        )
     try:
         result = await plan_actions(
             task=payload.task,

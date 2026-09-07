@@ -1,4 +1,4 @@
-import type { PipelineMessage, PipelineStage } from '../lib/types'
+import type { PipelineMessage, PipelineStage, PrivacyAudit } from '../lib/types'
 import { toUserFacingError } from '../lib/errors'
 import {
   DEFAULT_MODEL_ID,
@@ -20,6 +20,10 @@ const statusEl = document.getElementById('status') as HTMLParagraphElement
 const spinnerEl = document.getElementById('spinner') as HTMLElement
 const progressLabelEl = document.getElementById('progress-label') as HTMLParagraphElement
 const progressBarEl = document.getElementById('progress-bar') as HTMLElement
+const privacyAuditEl = document.getElementById('privacy-audit') as HTMLElement
+const privacyMetaEl = document.getElementById('privacy-meta') as HTMLParagraphElement
+const privacyBeforeEl = document.getElementById('privacy-before') as HTMLElement
+const privacyAfterEl = document.getElementById('privacy-after') as HTMLElement
 const stepEls = Array.from(
   document.querySelectorAll<HTMLLIElement>('#progress-steps li[data-stage]'),
 )
@@ -43,6 +47,25 @@ function setStatus(text: string, kind: 'ok' | 'error' | 'info' = 'info') {
   statusEl.textContent = text
   statusEl.classList.toggle('ok', kind === 'ok')
   statusEl.classList.toggle('error', kind === 'error')
+}
+
+function methodLabel(method: PrivacyAudit['method']): string {
+  return method === 'transformers-js-vlm' ? 'VLM + regex' : 'regex only'
+}
+
+function renderPrivacyAudit(audit: PrivacyAudit) {
+  privacyAuditEl.hidden = false
+  const truncNote = audit.truncated ? ' · preview truncated' : ''
+  privacyMetaEl.textContent = `Step ${audit.stepIndex} · Mask=${methodLabel(audit.method)} · ${audit.beforeChars} → ${audit.afterChars} chars${truncNote}`
+  privacyBeforeEl.textContent = audit.beforeMarkdown || '(empty)'
+  privacyAfterEl.textContent = audit.afterMarkdown || '(empty)'
+}
+
+function resetPrivacyAudit() {
+  privacyAuditEl.hidden = true
+  privacyMetaEl.textContent = 'Waiting for mask…'
+  privacyBeforeEl.textContent = ''
+  privacyAfterEl.textContent = ''
 }
 
 function setStepState(li: HTMLLIElement, state: string) {
@@ -215,8 +238,14 @@ async function initModelSelect() {
 }
 
 chrome.runtime.onMessage.addListener((message: PipelineMessage) => {
-  if (!running || message.type !== 'PIPELINE_PROGRESS') return
-  markStage(message.stage, message.label, message.percent)
+  if (!running) return
+  if (message.type === 'PIPELINE_PROGRESS') {
+    markStage(message.stage, message.label, message.percent)
+    return
+  }
+  if (message.type === 'PRIVACY_AUDIT') {
+    renderPrivacyAudit(message.audit)
+  }
 })
 
 closeBtn.addEventListener('click', () => {
@@ -237,6 +266,7 @@ runBtn.addEventListener('click', async () => {
   modelEl.disabled = true
   setStatus(`Working with ${MODEL_OPTIONS.find((o) => o.id === modelId)?.label ?? modelId}…`)
   resetSteps()
+  resetPrivacyAudit()
   // Immediate first paint so the user sees activity before background replies.
   markStage('capture', 'Capturing the page…')
 
@@ -254,9 +284,16 @@ runBtn.addEventListener('click', async () => {
       return
     }
 
+    if (response.privacyAudit) {
+      renderPrivacyAudit(response.privacyAudit)
+    }
+
     markStage('done', 'All steps finished')
     const answer = response.answer?.trim() || response.message?.trim()
-    setStatus(answer || 'Task completed.', 'ok')
+    const maskNote = response.maskMethod
+      ? ` · Mask=${methodLabel(response.maskMethod)}`
+      : ''
+    setStatus(`${answer || 'Task completed.'}${maskNote}`, 'ok')
   } catch (err: unknown) {
     const msg = toUserFacingError(err)
     markFailed(extractFailedStage(msg))

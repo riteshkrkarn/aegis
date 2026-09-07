@@ -1,4 +1,47 @@
-import type { PipelineProgressMessage, PipelineStage } from './types'
+import type {
+  PipelineProgressMessage,
+  PipelineStage,
+  PrivacyAudit,
+  PrivacyAuditMessage,
+} from './types'
+
+/** Cap preview size so the agent panel stays responsive during demos. */
+export const PRIVACY_AUDIT_PREVIEW_CHARS = 6_000
+
+export function buildPrivacyAudit(input: {
+  stepIndex: number
+  method: PrivacyAudit['method']
+  beforeMarkdown: string
+  afterMarkdown: string
+}): PrivacyAudit {
+  const truncated =
+    input.beforeMarkdown.length > PRIVACY_AUDIT_PREVIEW_CHARS ||
+    input.afterMarkdown.length > PRIVACY_AUDIT_PREVIEW_CHARS
+
+  const clip = (text: string) =>
+    text.length > PRIVACY_AUDIT_PREVIEW_CHARS
+      ? `${text.slice(0, PRIVACY_AUDIT_PREVIEW_CHARS)}\n…[truncated for demo panel]`
+      : text
+
+  return {
+    stepIndex: input.stepIndex,
+    method: input.method,
+    beforeMarkdown: clip(input.beforeMarkdown),
+    afterMarkdown: clip(input.afterMarkdown),
+    beforeChars: input.beforeMarkdown.length,
+    afterChars: input.afterMarkdown.length,
+    truncated,
+  }
+}
+
+/** Broadcast before/after mask payload to the agent panel (demo logger). */
+export function emitPrivacyAudit(audit: PrivacyAudit): void {
+  const payload: PrivacyAuditMessage = { type: 'PRIVACY_AUDIT', audit }
+  void chrome.runtime.sendMessage(payload).catch(() => {
+    // Popup may be closed; ignore.
+  })
+}
+
 
 type Pending = {
   stage: PipelineStage

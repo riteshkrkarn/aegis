@@ -37,4 +37,6 @@ Then load/reload the `dist` folder produced by the CRX Vite plugin (or follow CR
 4. `POST /agent/run` to FastAPI (sanitized markdown only — no screenshot)
 5. Execute returned JSON actions
 
-**First Run note:** the VLM downloads from Hugging Face on first use (can take a minute). Later runs reuse the browser cache. If the VLM fails/times out, masking falls back to regex and the popup shows `Mask=placeholder`.
+**First Run note:** the VLM downloads from Hugging Face on first use (can take a minute). Later runs reuse the browser cache. If the VLM fails/times out, masking falls back to regex and the panel shows `Mask=regex only`.
+
+**Demo logger:** the agent panel includes a **Privacy audit** section (before vs after masking). Set `DEBUG=1` in `backend/.env` to log the post-mask markdown the server receives.
