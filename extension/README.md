@@ -39,4 +39,4 @@ Then load/reload the `dist` folder produced by the CRX Vite plugin (or follow CR
 
 **First Run note:** the VLM downloads from Hugging Face on first use (can take a minute). Later runs reuse the browser cache. If the VLM fails/times out, masking falls back to regex and the panel shows `Mask=regex only`.
 
-**Demo logger:** the agent panel includes a **Privacy audit** section (before vs after masking). Set `DEBUG=1` in `backend/.env` to log the post-mask markdown the server receives.
+**Demo logger:** set `DEBUG=1` in `backend/.env`. Before/after masking prints in the uvicorn terminal and appends to `backend/logs/privacy-demo.log` (open that file in the editor for demos).

@@ -108,12 +108,31 @@ function describeInteractive(el: Element, index: number): string | null {
   const tag = el.tagName.toLowerCase()
   const id = el.id ? `#${el.id}` : ''
   const name = el.getAttribute('name')
-  const type = el.getAttribute('type')
+  const type = (el.getAttribute('type') || '').toLowerCase()
   const role = el.getAttribute('role')
   const aria = el.getAttribute('aria-label')
   const placeholder = el.getAttribute('placeholder')
   const href = el.getAttribute('href')
   const text = cleanText(el.textContent, 80)
+
+  // Surface current field values in markdown so local masking can redact them.
+  // Never export password / hidden values (screenshot + password: regex cover those).
+  let valueAttr: string | null = null
+  if (tag === 'input' || tag === 'textarea') {
+    const skipTypes = new Set(['password', 'hidden', 'file', 'submit', 'button', 'image', 'reset'])
+    if (!skipTypes.has(type)) {
+      const raw =
+        tag === 'textarea'
+          ? (el as HTMLTextAreaElement).value
+          : (el as HTMLInputElement).value
+      const clipped = cleanText(raw, 120)
+      if (clipped) valueAttr = `value=${clipped}`
+    }
+  } else if (tag === 'select') {
+    const sel = el as HTMLSelectElement
+    const clipped = cleanText(sel.value || sel.options[sel.selectedIndex]?.text, 80)
+    if (clipped) valueAttr = `value=${clipped}`
+  }
 
   const selectorParts: string[] = []
   if (el.id) selectorParts.push(`#${CSS.escape(el.id)}`)
@@ -128,6 +147,7 @@ function describeInteractive(el: Element, index: number): string | null {
     name ? `name=${name}` : null,
     aria ? `aria=${aria}` : null,
     placeholder ? `placeholder=${placeholder}` : null,
+    valueAttr,
     href ? `href=${href}` : null,
     text ? `text="${text}"` : null,
     `selector=${selector}`,

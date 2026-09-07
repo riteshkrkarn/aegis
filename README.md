@@ -81,7 +81,7 @@ This writes the loadable extension into `extension/dist`.
    - Confirm **SIH Browser AI Agent** appears and is enabled
 4. **Open a page to control**
    - Smoke page: `http://127.0.0.1:8765/smoke.html`
-   - PII demo (masking test cases): `http://127.0.0.1:8765/pii-demo.html`
+   - PII stress demo (clinic discharge): `http://127.0.0.1:8765/pii-demo.html`
    - Or any normal `http(s)` website (avoid `chrome://` pages — content scripts do not run there)
 5. **Run a task**
    - Click the extension icon in the toolbar (puzzle piece → pin **SIH Browser AI Agent** if needed)

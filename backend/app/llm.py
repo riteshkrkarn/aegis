@@ -54,6 +54,7 @@ Autonomy rules:
 - After navigate / search / submit / sort / filter / open, the following turn MUST verify.
 - Set done=true ONLY when intent is satisfied AND answer cites evidence from the CURRENT markdown.
 - When done=true, answer MUST be a clear user-facing result. Never done=true with empty answer.
+- answer MUST be a plain string (or null). Never an object, array, or nested JSON for answer.
 - actions may be [] when you are answering from the current page.
 - If intent is not met: refine (different query, filters, navigation, open a specific item, scroll for more).
   Do not repeat the exact same failed action sequence.
@@ -78,7 +79,7 @@ Return ONLY valid JSON:
 Rules:
 - actions MUST be [].
 - done MUST be true.
-- answer MUST be a non-empty string the user can read.
+- answer MUST be a non-empty plain string the user can read (never an object or array).
 - Base the answer only on the current markdown + prior results. Do not invent missing facts.
 - If the page only partially matches intent, say what matched, what did not, and the best available finding.
 """
@@ -128,6 +129,53 @@ def _parse_model_json(content: str) -> dict[str, Any]:
     if fence:
         content = fence.group(1).strip()
     return json.loads(content)
+
+
+def _as_plain_string(value: Any) -> str | None:
+    """Coerce model quirks (dict/list answers) into a readable string."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (dict, list)):
+        try:
+            return json.dumps(value, ensure_ascii=False, indent=2)
+        except (TypeError, ValueError):
+            return str(value)
+    if isinstance(value, (bool, int, float)):
+        return str(value)
+    return str(value)
+
+
+def _coerce_model_payload(parsed: Any) -> dict[str, Any]:
+    """Normalize LLM JSON so schema validation rarely 502s on shape drift."""
+    if not isinstance(parsed, dict):
+        raise ValueError('Model JSON root must be an object')
+
+    out: dict[str, Any] = dict(parsed)
+
+    actions = out.get('actions')
+    if actions is None:
+        out['actions'] = []
+    elif isinstance(actions, dict):
+        out['actions'] = [actions]
+    elif not isinstance(actions, list):
+        out['actions'] = []
+
+    if 'answer' in out:
+        out['answer'] = _as_plain_string(out.get('answer'))
+    if 'reasoning' in out:
+        out['reasoning'] = _as_plain_string(out.get('reasoning'))
+
+    done = out.get('done')
+    if isinstance(done, str):
+        out['done'] = done.strip().lower() in {'1', 'true', 'yes', 'on'}
+    elif done is None:
+        out['done'] = False
+    else:
+        out['done'] = bool(done)
+
+    return out
 
 
 def _provider_config(model_id: str | None = None) -> tuple[str, str, str] | None:
@@ -326,7 +374,7 @@ async def plan_actions(
 
     try:
         content = data['choices'][0]['message']['content']
-        parsed = _parse_model_json(content)
+        parsed = _coerce_model_payload(_parse_model_json(content))
         result = _normalize_result(
             AgentRunResponse.model_validate(parsed),
             force_answer=force_answer,
@@ -338,7 +386,8 @@ async def plan_actions(
             (result.answer or '')[:160],
         )
         return result
-    except (KeyError, IndexError, TypeError, json.JSONDecodeError, ValueError) as exc:
+    except Exception as exc:
+        # Includes pydantic ValidationError, KeyError, JSON errors, etc.
         logger.exception(
             'plan_actions parse_error content_preview=%r',
             str(data.get('choices', data))[:400] if isinstance(data, dict) else str(data)[:400],

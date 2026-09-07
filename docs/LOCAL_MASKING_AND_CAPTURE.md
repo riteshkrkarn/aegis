@@ -104,82 +104,83 @@ Manifest includes `offscreen` plus host permissions for Hugging Face / CDN so th
 
 ---
 
-## 4. Demo logger (implemented)
+## 4. Demo logger (terminal + file)
 
-### Extension — Privacy audit panel
+Privacy audit is **not** shown in the extension popup. With `DEBUG=1`, the backend logs **BEFORE** (pre-mask) and **AFTER** (what the LLM sees) to:
 
-After each observe/mask turn, the background sends a `PRIVACY_AUDIT` message with:
+1. The **uvicorn terminal**
+2. `backend/logs/privacy-demo.log` — open this file in Cursor to present without fighting Chrome focus
 
-- `beforeMarkdown` / `afterMarkdown` (preview capped at 6 000 chars)
-- `method` (`transformers-js-vlm` or `placeholder`)
-- char counts + step index
-
-The agent panel (`popup/index.html`) shows a **Privacy audit (demo)** section: before (on device only) vs after (sent to backend). Final `PIPELINE_RESULT` also carries `maskMethod` + last `privacyAudit`.
-
-| Files | Role |
-|-------|------|
-| `extension/src/lib/types.ts` | `PrivacyAudit`, `PRIVACY_AUDIT`, result fields |
-| `extension/src/lib/progress.ts` | `buildPrivacyAudit`, `emitPrivacyAudit` |
-| `extension/src/background/index.ts` | Emits audit after mask |
-| `extension/src/popup/*` | Audit UI |
-
-**Note:** “Before” text stays in the extension UI only — it is never uploaded. Screenshots still never leave the device.
-
-### Backend — `DEBUG=1` post-mask body log
-
-In `backend/.env`:
+### Setup
 
 ```env
+# backend/.env
 DEBUG=1
 ```
 
-Then `POST /agent/run` logs the full received `page_markdown` (already masked by the client) under logger `sih.agent`:
+Restart uvicorn. Extension sends `page_markdown` (masked) plus demo-only `debug_before_markdown` + `mask_method`. Before text is **never** passed into the LLM — only logged when `DEBUG=1`.
 
-```text
-agent.run DEBUG page_markdown (post-mask, received):
-...
-```
+### Showing the logger while Chrome must stay focused
 
-Default is off (`DEBUG=0`). Use only for demos — the body may still contain non-PII page content.
+`captureVisibleTab` needs the target tab visible. Do **not** focus Cursor mid-run.
+
+| Approach | How |
+|----------|-----|
+| **Best for judges** | Open `backend/logs/privacy-demo.log` in the editor beforehand. Run the task in Chrome. After the request hits, the file updates — switch to Cursor and scroll the log. |
+| **Side-by-side** | Chrome (demo tab + agent panel window) on one monitor; Cursor terminal on the other. |
+| **After the fact** | Run fully in Chrome, then show the terminal scrollback / log file. |
 
 ### How to demo
 
-1. Serve test pages: `cd backend && python -m http.server 8765 --directory test_pages`
-2. Open `http://127.0.0.1:8765/pii-demo.html` (rich PII) or `smoke.html` (minimal).
-3. Run a task in the agent panel → watch **Privacy audit** before/after + `Mask=…`.
-4. With `DEBUG=1`, watch the backend terminal for the post-mask markdown (should show `[REDACTED_*]`, no screenshot).
-5. Optional: DevTools Network → `POST /agent/run` body confirms the same.
+1. `DEBUG=1`, restart backend; open `privacy-demo.log` in the editor (optional).
+2. Serve pages: `cd backend && python -m http.server 8765 --directory test_pages`
+3. Open `http://127.0.0.1:8765/pii-demo.html`, run the primary task from the agent panel.
+4. In terminal or log file, confirm BEFORE has canaries and AFTER has `[REDACTED_*]`.
+
+| Files | Role |
+|-------|------|
+| `backend/app/privacy_log.py` | Terminal + file privacy audit |
+| `backend/app/routes/agent.py` | Calls logger; does not feed before to LLM |
+| `extension/src/background/index.ts` | Sends `debug_before_markdown` + `mask_method` |
 
 ---
 
 ## 4b. Manual test scenarios
 
-Serve pages first (`python -m http.server 8765 --directory test_pages` from `backend/`).
-Reload the extension after build. Prefer `pii-demo.html` for full coverage.
+Serve pages: `cd backend && python -m http.server 8765 --directory test_pages`  
+**Primary robust page:** `http://127.0.0.1:8765/pii-demo.html` (Arogya Clinic discharge & payment)
 
-| # | Scenario | Page / setup | Task to run | Pass criteria |
-|---|----------|--------------|-------------|----------------|
-| 1 | **Email redaction** | `pii-demo.html` Case A | `What email addresses are on this page?` | Before has `alice.privacy@example.com` / `secret@mail.test`; After has `[REDACTED_EMAIL]`; backend DEBUG log matches After |
-| 2 | **Card redaction** | Case C | `List any card numbers visible.` | Before has `4111…`; After `[REDACTED_CARD]`; no full PAN in Network request |
-| 3 | **Phone redaction** | Case B | `What phone numbers are listed?` | After shows `[REDACTED_PHONE]` (regex and/or VLM) |
-| 4 | **Password line** | Case D | `Summarize any credentials mentioned.` | After has `password: [REDACTED_PASSWORD]`; raw secret not in After / DEBUG log |
-| 5 | **VLM-only entities** | Case E (name/address) | `Who is the patient and where do they live?` | On **first step**, `Mask=VLM + regex` and name/address often become `[REDACTED_*]`. If VLM fails → `Mask=regex only` and name may remain (document as fallback) |
-| 6 | **False positives** | Case F (₹34,999 / 113990) | `What is the product price?` | Price/SKU still readable in After — not wiped as phone/card |
-| 7 | **No screenshot on wire** | Any | Any short task | Network `POST /agent/run` JSON has `page_markdown` only — no `screenshot`, no `data:image` |
-| 8 | **Multi-step method switch** | `pii-demo.html` | `Fill the name with Test User and click Submit.` | Step 0 audit: often VLM; later observe steps: `Mask=regex only` is OK |
-| 9 | **DEBUG off vs on** | Backend `.env` | Same task twice | `DEBUG=0`: only `markdown_chars=…`. `DEBUG=1`: full post-mask body logged |
-| 10 | **Cold vs warm model** | Clear extension Cache Storage, then rerun | Any task on step 0 | First run: download progress; second run: much faster, still masks |
-| 11 | **Minimal smoke** | `http://127.0.0.1:8765/smoke.html` | `Click the Submit button` | Email/card in Before; redacted in After; form submits locally |
-| 12 | **Answer without leaking** | Case A–C | `What email and card number appear on the page?` | Model answer should not echo raw PII from server context (server only saw redacted markdown) |
+### Primary robust case (use this for demos)
+
+| | |
+|--|--|
+| **URL** | `http://127.0.0.1:8765/pii-demo.html` |
+| **Task** | `Summarize this patient’s discharge contacts and payment method without repeating any secrets. Then confirm the amount due.` |
+| **Setup** | Extension reloaded; backend `DEBUG=1`; optionally open `backend/logs/privacy-demo.log` |
+| **Pass** | Log **BEFORE** contains canaries (`priya.sharma+discharge@…`, `4111 1111…`, `WardAccess!992`, phones). **AFTER** replaces them with `[REDACTED_*]`. Still present: `₹12,450`, `₹34,999`, `113990`, `AROGYA-CANARY-88421`. No screenshot in Network payload. |
+| **Stretch** | Step 0 `mask=transformers-js-vlm` also redacts name / MG Road address. |
+
+### Additional scenarios
+
+| # | Scenario | Setup | Task | Pass criteria |
+|---|----------|-------|------|----------------|
+| 1 | Email / card / phone / password pack | `pii-demo.html` | Primary task above | Canaries gone from AFTER in log |
+| 2 | False positives | Billing noise | `How much is due, and what invoice number is shown?` | Prices / invoice survive in AFTER |
+| 3 | Form mutation | Checkout form | `Change the billing email field to demo@safe.test and click Confirm payment.` | Actions run |
+| 4 | No screenshot on wire | Any | Short task | `POST /agent/run` has no image |
+| 5 | DEBUG off vs on | `.env` | Same task twice | `DEBUG=0` → no privacy block; `DEBUG=1` → BEFORE/AFTER |
+| 6 | Cold vs warm model | Clear Cache Storage | Primary task | First run downloads; second faster |
+| 7 | Minimal smoke | `smoke.html` | `Click the Submit button` | Email/card redacted in AFTER |
+| 8 | Structured `answer` hardening | Any finish | Primary task | Object-shaped `answer` from the model is coerced to a string — no 502 |
 
 ### Quick pass/fail checklist (demo day)
 
-- [ ] Audit panel appears after mask
-- [ ] Before ≠ After for at least email or card
-- [ ] After contains `[REDACTED_EMAIL]` or `[REDACTED_CARD]`
-- [ ] `DEBUG=1` terminal shows same redacted text
-- [ ] No screen-share permission prompt (`captureVisibleTab`)
-- [ ] No image payload in `/agent/run`
+- [ ] Open `pii-demo.html`, run primary task (keep Chrome focused until done)
+- [ ] Terminal or `privacy-demo.log`: BEFORE ≠ AFTER
+- [ ] Grep AFTER for `priya.sharma` / `4111 1111` / `WardAccess` → **0 hits**
+- [ ] Grep AFTER for `₹12,450` and `AROGYA-CANARY` → **hits**
+- [ ] No screen-share prompt; no image in `/agent/run`
+
 
 ---
 

@@ -37,6 +37,15 @@ class AgentRunRequest(BaseModel):
         default=False,
         description='When true, model must finish with done=true and a user-facing answer',
     )
+    # Demo-only fields: logged when DEBUG=1; never passed to the LLM.
+    debug_before_markdown: Optional[str] = Field(
+        default=None,
+        description='Pre-mask markdown for local DEBUG privacy audit (not used for planning)',
+    )
+    mask_method: Optional[str] = Field(
+        default=None,
+        description='Client mask method: transformers-js-vlm | placeholder',
+    )
 
 
 class AgentRunResponse(BaseModel):

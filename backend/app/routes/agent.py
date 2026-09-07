@@ -1,9 +1,9 @@
 import logging
-import os
 
 from fastapi import APIRouter, HTTPException
 
 from ..llm import LlmProviderError, plan_actions
+from ..privacy_log import log_privacy_audit
 from ..schemas import AgentRunRequest, AgentRunResponse
 
 logger = logging.getLogger('sih.agent')
@@ -11,27 +11,25 @@ logger = logging.getLogger('sih.agent')
 router = APIRouter(prefix='/agent', tags=['agent'])
 
 
-def _debug_enabled() -> bool:
-    return os.getenv('DEBUG', '').strip().lower() in {'1', 'true', 'yes', 'on'}
-
-
 @router.post('/run', response_model=AgentRunResponse)
 async def run_agent(payload: AgentRunRequest) -> AgentRunResponse:
     logger.info(
-        'agent.run start task=%r url=%r step=%s model=%s markdown_chars=%d prior=%d',
+        'agent.run start task=%r url=%r step=%s model=%s markdown_chars=%d prior=%d mask=%s',
         payload.task[:120],
         payload.page_url,
         payload.step_index,
         payload.model_id or 'default',
         len(payload.page_markdown or ''),
         len(payload.prior_results or []),
+        payload.mask_method or 'n/a',
     )
-    if _debug_enabled():
-        # Demo logger: show exactly what arrived after client-side masking.
-        logger.info(
-            'agent.run DEBUG page_markdown (post-mask, received):\n%s',
-            payload.page_markdown or '',
-        )
+    log_privacy_audit(
+        step_index=payload.step_index,
+        page_url=payload.page_url,
+        mask_method=payload.mask_method,
+        before_markdown=payload.debug_before_markdown,
+        after_markdown=payload.page_markdown,
+    )
     try:
         result = await plan_actions(
             task=payload.task,

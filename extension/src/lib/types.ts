@@ -1,5 +1,7 @@
 export type AgentActionType = 'click' | 'fill' | 'scroll' | 'navigate' | 'wait'
 
+export type MaskMethod = 'placeholder' | 'transformers-js-vlm'
+
 export interface AgentAction {
   action: AgentActionType
   selector?: string
@@ -18,6 +20,9 @@ export interface AgentRunRequest {
   model_id?: string
   /** Final turn: model must return done + answer, no more actions. */
   force_answer?: boolean
+  /** Pre-mask markdown for backend DEBUG terminal/file logger only. */
+  debug_before_markdown?: string
+  mask_method?: MaskMethod
 }
 
 export interface AgentRunResponse {
@@ -56,24 +61,6 @@ export type PipelineProgressMessage = {
   percent?: number
 }
 
-export type MaskMethod = 'placeholder' | 'transformers-js-vlm'
-
-/** Demo audit: local before/after masking (raw never leaves the device). */
-export interface PrivacyAudit {
-  stepIndex: number
-  method: MaskMethod
-  beforeMarkdown: string
-  afterMarkdown: string
-  beforeChars: number
-  afterChars: number
-  truncated: boolean
-}
-
-export type PrivacyAuditMessage = {
-  type: 'PRIVACY_AUDIT'
-  audit: PrivacyAudit
-}
-
 export type PipelineMessage =
   | { type: 'RUN_TASK'; task: string; modelId?: string }
   | { type: 'PING' }
@@ -86,8 +73,6 @@ export type PipelineMessage =
       actions?: AgentAction[]
       answer?: string
       maskMethod?: MaskMethod
-      privacyAudit?: PrivacyAudit
     }
   | PipelineProgressMessage
-  | PrivacyAuditMessage
   | OffscreenFindPiiMessage

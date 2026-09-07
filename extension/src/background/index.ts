@@ -4,14 +4,13 @@ import { runAgentOnServer } from '../lib/api'
 import { ensureContentScript } from '../lib/contentBridge'
 import { executeActionsSafely } from '../lib/execute'
 import { toUserFacingError } from '../lib/errors'
-import { buildPrivacyAudit, emitPrivacyAudit, emitProgress } from '../lib/progress'
+import { emitProgress } from '../lib/progress'
 import { getTargetTabId, openAgentPanel } from '../lib/agentPanel'
 import type {
   AgentAction,
   MaskMethod,
   PipelineMessage,
   PipelineStage,
-  PrivacyAudit,
 } from '../lib/types'
 
 const MAX_AGENT_STEPS = 8
@@ -68,9 +67,9 @@ async function observePage(
   step: number,
 ): Promise<{
   maskedMarkdown: string
+  beforeMarkdown: string
   maskMethod: MaskMethod
   url: string
-  privacyAudit: PrivacyAudit
 }> {
   const tab = await chrome.tabs.get(tabId)
 
@@ -98,19 +97,11 @@ async function observePage(
   })
   emitProgress('mask', 'Privacy mask applied')
 
-  const privacyAudit = buildPrivacyAudit({
-    stepIndex: step,
-    method: masked.method,
-    beforeMarkdown: markdown,
-    afterMarkdown: masked.maskedMarkdown,
-  })
-  emitPrivacyAudit(privacyAudit)
-
   return {
     maskedMarkdown: masked.maskedMarkdown,
+    beforeMarkdown: markdown,
     maskMethod: masked.method,
     url: tab.url ?? '',
-    privacyAudit,
   }
 }
 
@@ -122,7 +113,6 @@ async function runTaskPipeline(
   actions: AgentAction[]
   answer?: string
   maskMethod: MaskMethod
-  privacyAudit?: PrivacyAudit
 }> {
   let stage: PipelineStage = 'capture'
   const tab = await getActiveTab()
@@ -133,7 +123,6 @@ async function runTaskPipeline(
   const priorResults: string[] = []
   let priorReasoning = ''
   let lastMaskMethod: MaskMethod = 'placeholder'
-  let lastPrivacyAudit: PrivacyAudit | undefined
   let finalAnswer = ''
   let pendingAnswer = ''
 
@@ -152,7 +141,6 @@ async function runTaskPipeline(
 
       const observed = await observePage(tabId, windowId, step)
       lastMaskMethod = observed.maskMethod
-      lastPrivacyAudit = observed.privacyAudit
 
       stage = 'server'
       emitProgress(
@@ -172,6 +160,8 @@ async function runTaskPipeline(
         prior_reasoning: priorReasoning,
         model_id: modelId,
         force_answer: isLastPlan,
+        debug_before_markdown: observed.beforeMarkdown,
+        mask_method: observed.maskMethod,
       })
 
       priorReasoning = serverResult.reasoning || priorReasoning
@@ -225,7 +215,6 @@ async function runTaskPipeline(
       emitProgress('server', 'Final verify — writing answer…')
       const observed = await observePage(tabId, windowId, MAX_AGENT_STEPS)
       lastMaskMethod = observed.maskMethod
-      lastPrivacyAudit = observed.privacyAudit
       stage = 'server'
       const serverResult = await runAgentOnServer({
         task,
@@ -236,6 +225,8 @@ async function runTaskPipeline(
         prior_reasoning: priorReasoning,
         model_id: modelId,
         force_answer: true,
+        debug_before_markdown: observed.beforeMarkdown,
+        mask_method: observed.maskMethod,
       })
       const turnAnswer = serverResult.answer?.trim() || ''
       finalAnswer = turnAnswer || pendingAnswer
@@ -245,7 +236,6 @@ async function runTaskPipeline(
       actions: allActions,
       answer: finalAnswer || undefined,
       maskMethod: lastMaskMethod,
-      privacyAudit: lastPrivacyAudit,
       message: finalAnswer
         ? finalAnswer
         : 'Task finished, but the model did not return a final text answer.',
@@ -275,7 +265,6 @@ chrome.runtime.onMessage.addListener((message: PipelineMessage, _sender, sendRes
         actions: result.actions,
         answer: result.answer,
         maskMethod: result.maskMethod,
-        privacyAudit: result.privacyAudit,
       } satisfies PipelineMessage)
     })
     .catch((err: unknown) => {

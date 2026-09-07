@@ -33,4 +33,9 @@ app.include_router(agent_router)
 
 @app.get('/health')
 def health() -> dict[str, str]:
-    return {'status': 'ok'}
+    from .privacy_log import debug_enabled
+
+    return {
+        'status': 'ok',
+        'privacy_debug': 'on' if debug_enabled() else 'off',
+    }

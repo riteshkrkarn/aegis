@@ -15,12 +15,16 @@ const PII_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
     // 13–19 digit card numbers; ignore short currency amounts.
     pattern: /\b(?:\d[ -]*?){13,19}\b/g,
   },
-  {
-    name: 'phone',
-    // Prefer numbers that look like phones (optional +country), not ₹34,999 prices.
-    pattern:
-      /(?<!₹)\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{2,4}\)?[-.\s]?)?\d{3,4}[-.\s]\d{4}\b/g,
-  },
+]
+
+/** Phone shapes used on the demo page + common US/IN forms (not card groups). */
+const PHONE_PATTERNS: RegExp[] = [
+  /\+\d{1,3}\s?\d{5}[\s-]\d{5}\b/g, // +91 99887-66554
+  /\+\d{1,3}\s?\d{10}\b/g, // +919876543210
+  /\(\d{2,4}\)[\s-]?\d{3,4}[\s-]\d{4}\b/g, // (022) 4000-2199
+  /\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/g, // 415-555-0198
+  /\b[6-9]\d{4}[\s-]\d{5}\b/g, // 98765-43210
+  /\b[6-9]\d{9}\b/g, // 9876543210
 ]
 
 function looksLikeCurrencyAmount(value: string): boolean {
@@ -40,12 +44,16 @@ export function maskPiiInText(text: string): string {
   let masked = text
   for (const { name, pattern } of PII_PATTERNS) {
     masked = masked.replace(pattern, (match) => {
-      if (name === 'phone' && looksLikeCurrencyAmount(match)) return match
-      // Keep plain prices like 34,999 or 113990 when adjacent to currency markers nearby
-      if (name === 'phone' && /^[\d,]+(?:\.\d+)?$/.test(match) && match.length <= 8) {
-        return match
-      }
       return `[REDACTED_${name.toUpperCase()}]`
+    })
+  }
+  for (const pattern of PHONE_PATTERNS) {
+    // Reset lastIndex for global patterns reused across calls.
+    pattern.lastIndex = 0
+    masked = masked.replace(pattern, (match) => {
+      if (looksLikeCurrencyAmount(match)) return match
+      if (/^[\d,]+(?:\.\d+)?$/.test(match) && match.length <= 8) return match
+      return '[REDACTED_PHONE]'
     })
   }
   masked = masked.replace(

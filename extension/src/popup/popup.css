@@ -293,59 +293,6 @@ button:disabled {
   opacity: 1;
 }
 
-.privacy-audit {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border-radius: var(--radius);
-  background: color-mix(in srgb, var(--panel) 88%, black);
-  border: 1px solid #2c4d59;
-}
-
-.privacy-audit[hidden] {
-  display: none;
-}
-
-.privacy-audit-head {
-  display: grid;
-  gap: 2px;
-}
-
-.privacy-meta {
-  margin: 0;
-  font-size: 12px;
-  color: var(--ink);
-  line-height: 1.4;
-}
-
-.privacy-cols {
-  display: grid;
-  gap: 10px;
-}
-
-.privacy-col {
-  display: grid;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.privacy-pre {
-  margin: 0;
-  max-height: 160px;
-  overflow: auto;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid #2c4d59;
-  background: #0b151a;
-  color: #c5d7de;
-  font-family: "Cascadia Code", "Consolas", "Courier New", monospace;
-  font-size: 10px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 .status {
   min-height: 38px;
   padding: 10px 12px;
