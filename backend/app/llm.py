@@ -58,6 +58,8 @@ Autonomy rules:
 - If intent is not met: refine (different query, filters, navigation, open a specific item, scroll for more).
   Do not repeat the exact same failed action sequence.
 - If stuck or page lacks what you need, say so in reasoning and try an alternate path — do not invent facts.
+- Prefer structured "Product / result listings" rows (title + price) when present —
+  they are extracted from the DOM including prices that may not appear in plain visible text.
 - Prefer stable selectors from the markdown (id, name, aria-label, placeholder, role).
 - After fill on a search/input, click the matching submit/control when needed.
 - Use wait when the page will change. Never invent passwords/secrets. Never ask the user questions in JSON.

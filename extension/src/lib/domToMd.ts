@@ -1,5 +1,5 @@
 /**
- * Convert a document (or HTML string) into lightweight Markdown for the LLM.
+ * Convert a document into lightweight Markdown for the LLM.
  * Runs in the content-script context where `document` is available.
  */
 
@@ -9,6 +9,97 @@ function isVisible(el: Element): boolean {
   const style = window.getComputedStyle(html)
   if (style.display === 'none' || style.visibility === 'hidden') return false
   return true
+}
+
+function cleanText(value: string | null | undefined, max = 200): string {
+  return (value || '').replace(/\s+/g, ' ').trim().slice(0, max)
+}
+
+/** Amazon (and similar) often keep the real price in .a-offscreen / aria text. */
+function extractPrice(root: Element): string {
+  const offscreen = root.querySelector(
+    '.a-price .a-offscreen, .a-color-price, [data-a-color="price"] .a-offscreen',
+  )
+  const off = cleanText(offscreen?.textContent, 40)
+  if (off) return off
+
+  const symbol = cleanText(root.querySelector('.a-price-symbol')?.textContent, 4)
+  const whole = cleanText(root.querySelector('.a-price-whole')?.textContent, 24).replace(/[.,]$/, '')
+  const frac = cleanText(root.querySelector('.a-price-fraction')?.textContent, 8)
+  if (whole) return `${symbol}${whole}${frac ? `.${frac}` : ''}`
+
+  // Generic currency patterns inside the card
+  const blob = cleanText(root.textContent, 500)
+  const match = blob.match(/(?:₹|Rs\.?|INR|\$|€|£)\s*[\d,]+(?:\.\d+)?/i)
+  return match ? match[0] : ''
+}
+
+function extractProductCards(doc: Document): string[] {
+  const cards = doc.querySelectorAll(
+    [
+      '[data-component-type="s-search-result"]',
+      '.s-result-item[data-asin]:not([data-asin=""])',
+      'div[data-asin]:not([data-asin=""])',
+      '[data-testid="product-card"]',
+      '.product-card',
+      'li.product-item',
+    ].join(', '),
+  )
+
+  const lines: string[] = []
+  const seen = new Set<string>()
+  const MAX_CARDS = 25
+
+  for (let i = 0; i < cards.length && lines.length < MAX_CARDS; i++) {
+    const card = cards[i]
+    if (!isVisible(card)) continue
+
+    const asin = card.getAttribute('data-asin') || ''
+    const titleEl =
+      card.querySelector('h2 a span') ||
+      card.querySelector('h2 span') ||
+      card.querySelector('h2') ||
+      card.querySelector('[data-cy="title-recipe"]') ||
+      card.querySelector('a.a-link-normal .a-text-normal') ||
+      card.querySelector('a[href*="/dp/"]')
+    const title = cleanText(titleEl?.textContent, 160)
+    if (!title || title.length < 4) continue
+
+    const price = extractPrice(card)
+    const rating = cleanText(
+      card.querySelector('.a-icon-alt, [aria-label*="out of 5"]')?.textContent,
+      60,
+    )
+    const key = `${title}|${price}|${asin}`
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    const parts = [`${lines.length + 1}. ${title}`]
+    if (price) parts.push(`price=${price}`)
+    if (rating) parts.push(`rating=${rating}`)
+    if (asin) parts.push(`asin=${asin}`)
+    lines.push(parts.join(' | '))
+  }
+
+  return lines
+}
+
+function extractVisibleText(doc: Document): string {
+  const mainEl = doc.querySelector(
+    'main, [role="main"], #main, #search, .s-main-slot, #centerCol, #dp-container',
+  )
+  const root = (mainEl as HTMLElement | null) || doc.body
+  if (!root) return ''
+
+  // Prefer innerText blocks with newlines so listings stay separable.
+  const raw = root.innerText || root.textContent || ''
+  return raw
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .slice(0, 220)
+    .join('\n')
+    .slice(0, 10000)
 }
 
 function describeInteractive(el: Element, index: number): string | null {
@@ -22,7 +113,7 @@ function describeInteractive(el: Element, index: number): string | null {
   const aria = el.getAttribute('aria-label')
   const placeholder = el.getAttribute('placeholder')
   const href = el.getAttribute('href')
-  const text = (el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80)
+  const text = cleanText(el.textContent, 80)
 
   const selectorParts: string[] = []
   if (el.id) selectorParts.push(`#${CSS.escape(el.id)}`)
@@ -50,41 +141,43 @@ function describeInteractive(el: Element, index: number): string | null {
 export function documentToMarkdown(doc: Document = document): string {
   const title = doc.title || 'Untitled'
   const url = doc.location?.href || ''
-  const lines: string[] = [
-    `# ${title}`,
-    '',
-    `URL: ${url}`,
-    '',
-    '## Interactive elements',
-    '',
-  ]
+  const lines: string[] = [`# ${title}`, '', `URL: ${url}`, '']
+
+  const products = extractProductCards(doc)
+  if (products.length) {
+    lines.push('## Product / result listings (title + price)', '')
+    lines.push(
+      'Use these rows as primary evidence for shopping or comparison tasks.',
+    )
+    lines.push('')
+    lines.push(...products)
+    lines.push('')
+  }
+
+  lines.push('## Visible text', '')
+  const bodyText = extractVisibleText(doc)
+  lines.push(bodyText || '_No visible text._')
+  lines.push('', '## Interactive elements', '')
 
   const interactive = doc.querySelectorAll(
-    'a[href], button, input, textarea, select, [role="button"], [onclick]',
+    'input, button, textarea, select, [role="button"], a[href], [onclick]',
   )
 
   let count = 0
-  interactive.forEach((el, index) => {
-    const row = describeInteractive(el, index)
+  const MAX_INTERACTIVE = 70
+  for (let i = 0; i < interactive.length && count < MAX_INTERACTIVE; i++) {
+    const el = interactive[i]
+    const row = describeInteractive(el, i)
     if (row) {
       lines.push(row)
       count += 1
     }
-  })
+  }
 
   if (count === 0) {
     lines.push('_No interactive elements found._')
   }
 
-  lines.push('', '## Visible text (excerpt)', '')
-
-  const bodyText = (doc.body?.innerText || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 4000)
-  lines.push(bodyText || '_No visible text._')
-
-  // Prefer stable selectors: rewrite nth hints using id/name when possible
   return lines.join('\n')
 }
 

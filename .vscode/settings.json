@@ -1,0 +1,5 @@
+{
+  "markdown.extension.completion.enabled": false,
+  "markdown.extension.tableFormatter.enabled": false,
+  "postman.settings.dotenv-detection-notification-visibility": false
+}

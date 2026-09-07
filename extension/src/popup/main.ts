@@ -255,15 +255,8 @@ runBtn.addEventListener('click', async () => {
     }
 
     markStage('done', 'All steps finished')
-    const answer = response.answer?.trim()
-    const actionSummary =
-      response.actions?.map((a) => a.action + (a.selector ? ` · ${a.selector}` : '')).join('\n') ||
-      'No actions'
-    if (answer) {
-      setStatus(`Answer:\n${answer}\n\n${response.message}\n\nActions:\n${actionSummary}`, 'ok')
-    } else {
-      setStatus(`${response.message}\n\nActions:\n${actionSummary}`, 'ok')
-    }
+    const answer = response.answer?.trim() || response.message?.trim()
+    setStatus(answer || 'Task completed.', 'ok')
   } catch (err: unknown) {
     const msg = toUserFacingError(err)
     markFailed(extractFailedStage(msg))

@@ -220,18 +220,12 @@ async function runTaskPipeline(
       finalAnswer = turnAnswer || pendingAnswer
     }
 
-    const maskLabel =
-      lastMaskMethod === 'transformers-js-vlm' ? 'local VLM' : 'basic (regex)'
-    emitProgress('done', 'Done')
-
-    const answerLine = finalAnswer
-      ? finalAnswer
-      : 'Task finished, but the model did not return a final text answer.'
-
     return {
       actions: allActions,
       answer: finalAnswer || undefined,
-      message: `${answerLine}\n\nMasked with ${maskLabel}.`,
+      message: finalAnswer
+        ? finalAnswer
+        : 'Task finished, but the model did not return a final text answer.',
     }
   } catch (err) {
     console.error(`[SIH Agent] failed at stage=${stage}`, err)

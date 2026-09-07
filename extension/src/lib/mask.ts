@@ -12,13 +12,20 @@ const PII_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
   { name: 'email', pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g },
   {
     name: 'card',
+    // 13–19 digit card numbers; ignore short currency amounts.
     pattern: /\b(?:\d[ -]*?){13,19}\b/g,
   },
   {
     name: 'phone',
-    pattern: /\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{2,4}\)?[-.\s]?)?\d{3,4}[-.\s]?\d{4}\b/g,
+    // Prefer numbers that look like phones (optional +country), not ₹34,999 prices.
+    pattern:
+      /(?<!₹)\b(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{2,4}\)?[-.\s]?)?\d{3,4}[-.\s]\d{4}\b/g,
   },
 ]
+
+function looksLikeCurrencyAmount(value: string): boolean {
+  return /^(?:₹|Rs\.?|INR|\$|€|£)?\s*[\d,]+(?:\.\d+)?$/i.test(value.trim())
+}
 
 const VLM_TIMEOUT_MS = 180_000
 
@@ -32,7 +39,14 @@ export interface MaskResult {
 export function maskPiiInText(text: string): string {
   let masked = text
   for (const { name, pattern } of PII_PATTERNS) {
-    masked = masked.replace(pattern, `[REDACTED_${name.toUpperCase()}]`)
+    masked = masked.replace(pattern, (match) => {
+      if (name === 'phone' && looksLikeCurrencyAmount(match)) return match
+      // Keep plain prices like 34,999 or 113990 when adjacent to currency markers nearby
+      if (name === 'phone' && /^[\d,]+(?:\.\d+)?$/.test(match) && match.length <= 8) {
+        return match
+      }
+      return `[REDACTED_${name.toUpperCase()}]`
+    })
   }
   masked = masked.replace(
     /(password|passwd|pwd)\s*[:=]\s*\S+/gi,
@@ -47,6 +61,7 @@ export function applyPiiFindings(text: string, findings: PiiFinding[]): string {
   const sorted = [...findings].sort((a, b) => b.value.length - a.value.length)
   for (const { type, value } of sorted) {
     if (!value) continue
+    if (looksLikeCurrencyAmount(value)) continue
     const label = `[REDACTED_${type.toUpperCase().replace(/[^A-Z0-9]+/gi, '_')}]`
     masked = masked.split(value).join(label)
   }

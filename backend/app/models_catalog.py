@@ -24,10 +24,10 @@ class ModelOption(TypedDict):
 MODEL_OPTIONS: list[ModelOption] = [
     {
         'id': 'openai-gpt',
-        'label': 'OpenAI GPT-4.1 Mini',
+        'label': 'OpenAI GPT-4o Mini',
         'provider': 'openai',
-        'model': 'gpt-4.1-mini',
-        'description': 'OpenAI · mid-cost, strong agent planner',
+        'model': 'gpt-4o-mini',
+        'description': 'OpenAI · fast, strong agent planner',
     },
     {
         'id': 'groq-qwen',
