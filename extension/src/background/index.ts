@@ -17,8 +17,8 @@ const MAX_AGENT_STEPS = 8
 
 async function getActiveTab(): Promise<chrome.tabs.Tab> {
   // Prefer the last-focused normal browser window's active tab.
-  // Do NOT stick to a stale targetTabId from an earlier demo page — that
-  // forces chrome.tabs.update(... active) and feels like "going back" to pii-demo.
+  // Do NOT stick to a stale targetTabId from an earlier page - that
+  // forces chrome.tabs.update(... active) and jumps back to the wrong tab.
   // windowTypes: ['normal'] excludes the agent panel popup even when it is focused.
   try {
     const last = await chrome.windows.getLastFocused({
