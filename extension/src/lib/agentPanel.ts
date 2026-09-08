@@ -18,8 +18,12 @@ async function setStoredWindowId(id: number | undefined): Promise<void> {
 
 /** Open or focus the persistent agent panel (survives blur / minimize better than action popup). */
 export async function openAgentPanel(sourceTab?: chrome.tabs.Tab): Promise<void> {
+  // Always re-bind to the tab where the user clicked the icon.
   if (sourceTab?.id && sourceTab.id >= 0 && !sourceTab.url?.startsWith('chrome-extension://')) {
     await chrome.storage.session.set({ [TARGET_TAB_KEY]: sourceTab.id })
+  } else {
+    // Icon clicked with no usable tab: clear stale binding so Run uses last-focused page.
+    await chrome.storage.session.remove(TARGET_TAB_KEY)
   }
 
   const existingId = await getStoredWindowId()

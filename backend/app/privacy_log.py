@@ -51,7 +51,7 @@ def log_privacy_audit(
 
     if not dbg:
         logger.info(
-            'privacy.audit skipped — set DEBUG=1 in backend/.env to print BEFORE/AFTER',
+            'privacy.audit skipped  -  set DEBUG=1 in backend/.env to print BEFORE/AFTER',
         )
         return
 
@@ -64,11 +64,11 @@ def log_privacy_audit(
         f'before_chars={len(before)}  after_chars={len(after)}  '
         f'redacted_tokens={redacted_hits}\n'
         f'{"-" * 72}\n'
-        f'BEFORE (client pre-mask — demo only; not used by LLM)\n'
+        f'BEFORE (client pre-mask  -  demo only; not used by LLM)\n'
         f'{"-" * 72}\n'
-        f'{before or "(not provided — rebuild/reload the extension)"}\n'
+        f'{before or "(not provided  -  rebuild/reload the extension)"}\n'
         f'{"-" * 72}\n'
-        f'AFTER (what /agent/run received — sanitized markdown for LLM)\n'
+        f'AFTER (what /agent/run received  -  sanitized markdown for LLM)\n'
         f'{"-" * 72}\n'
         f'{after}\n'
         f'{"=" * 72}\n'

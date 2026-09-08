@@ -1,4 +1,4 @@
-# SIH Browser AI Agent — Backend
+# SIH Browser AI Agent  -  Backend
 
 Python FastAPI server that accepts sanitized page markdown + a user task and returns JSON browser actions.
 
@@ -14,9 +14,9 @@ copy .env.example .env
 ```
 
 In `.env`:
-- `GROQ_API_KEY` — used when `LLM_PROVIDER=groq` (default)
-- `NVIDIA_API_KEY` — used when `LLM_PROVIDER=nvidia` (NVIDIA NIM)
-- `LLM_PROVIDER=heuristic` — force offline fallback
+- `GROQ_API_KEY`  -  used when `LLM_PROVIDER=groq` (default)
+- `NVIDIA_API_KEY`  -  used when `LLM_PROVIDER=nvidia` (NVIDIA NIM)
+- `LLM_PROVIDER=heuristic`  -  force offline fallback
 
 Without a matching key, a heuristic planner is used for local smoke tests.
 

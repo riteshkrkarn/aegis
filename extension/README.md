@@ -1,4 +1,4 @@
-# SIH Browser AI Agent — Extension
+# SIH Browser AI Agent  -  Extension
 
 Chrome MV3 TypeScript extension.
 
@@ -34,7 +34,7 @@ Then load/reload the `dist` folder produced by the CRX Vite plugin (or follow CR
 1. Capture visible tab
 2. Local PII mask via Transformers.js VLM in an **offscreen document** (`HuggingFaceTB/SmolVLM-256M-Instruct`, WebGPU preferred) + regex safety net
 3. DOM → Markdown via content script
-4. `POST /agent/run` to FastAPI (sanitized markdown only — no screenshot)
+4. `POST /agent/run` to FastAPI (sanitized markdown only  -  no screenshot)
 5. Execute returned JSON actions
 
 **First Run note:** the VLM downloads from Hugging Face on first use (can take a minute). Later runs reuse the browser cache. If the VLM fails/times out, masking falls back to regex and the panel shows `Mask=regex only`.

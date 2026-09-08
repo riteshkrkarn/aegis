@@ -1,4 +1,4 @@
-# SIH26171: Browser AI Agent — Project Idea
+# SIH26171: Browser AI Agent  -  Project Idea
 
 **Sponsor:** ISRO | **Theme:** Smart Automation | **Prize:** ₹1,00,000
 
@@ -6,7 +6,7 @@
 
 ## The Problem
 
-Build a browser-based AI agent (like **Comet by Perplexity**) that can complete tasks on the web for the user — clicking, filling forms, navigating, extracting info, etc. — while keeping sensitive data (passwords, emails, card numbers) from being exposed when processed by an LLM.
+Build a browser-based AI agent (like **Comet by Perplexity**) that can complete tasks on the web for the user  -  clicking, filling forms, navigating, extracting info, etc.  -  while keeping sensitive data (passwords, emails, card numbers) from being exposed when processed by an LLM.
 
 ---
 
@@ -17,7 +17,7 @@ A Chrome extension AI agent that:
 1. **Sees** the page (capture + DOM)
 2. **Masks** sensitive data locally with a **Transformers.js VLM** (vision + language; not WebLLM)
 3. **Compresses** context via DOM → Markdown
-4. **Thinks** — light tasks on-device (later), heavy/agentic tasks on a **Python FastAPI** server
+4. **Thinks**  -  light tasks on-device (later), heavy/agentic tasks on a **Python FastAPI** server
 5. **Acts** via JSON commands the extension runs on the page
 6. **Remembers** via a chatbot-style session history opened from the popup (later)
 
@@ -55,7 +55,7 @@ Logged in chatbot-style session history
 | Page capture | Done |
 | DOM → Markdown | Done |
 | Pipeline: mask → API → execute actions | Done |
-| PII masking | **Partial** — regex/placeholder; real VLM not wired |
+| PII masking | **Partial**  -  regex/placeholder; real VLM not wired |
 | FastAPI `/agent/run` + action schemas | Done |
 | Groq client (optional) + heuristic fallback | Done |
 | Smoke test page + pipeline script | Done |

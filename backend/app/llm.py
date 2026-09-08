@@ -40,33 +40,34 @@ Return ONLY valid JSON (no markdown fences):
 }
 
 Turn workflow (do this mentally every turn):
-1. INTENT — Restate what success looks like for THIS task (outcome, constraints, what would NOT count).
-2. OBSERVE — What does the current page actually show? Quote concrete evidence from the markdown.
-3. VERIFY — Does this page state advance or satisfy the intent?
+1. INTENT  -  Restate what success looks like for THIS task (outcome, constraints, what would NOT count).
+2. OBSERVE  -  What does the current page actually show? Quote concrete evidence from the markdown.
+3. VERIFY  -  Does this page state advance or satisfy the intent?
    - Match = relevant content for the asked outcome (not merely related or adjacent content).
    - Mismatch / partial / ambiguous = do NOT finish; plan a correction.
-4. PLAN — Choose the smallest useful next move (1–3 actions), or finish if verified.
-5. ACT or ANSWER — Emit actions, or set done=true with answer.
+4. PLAN  -  Choose the smallest useful next move (1–3 actions), or finish if verified.
+5. ACT or ANSWER  -  Emit actions, or set done=true with answer.
 
 Autonomy rules:
 - Prefer 1–3 actions per turn, then stop so the client can re-observe and you can verify.
-- Never assume an action worked — the next turn's markdown is the proof.
+- Never assume an action worked  -  the next turn's markdown is the proof.
 - After navigate / search / submit / sort / filter / open, the following turn MUST verify.
 - Set done=true ONLY when intent is satisfied AND answer cites evidence from the CURRENT markdown.
 - When done=true, answer MUST be a clear user-facing result. Never done=true with empty answer.
 - answer MUST be a plain string (or null). Never an object, array, or nested JSON for answer.
+- If page status shows SUBMIT_BLOCKED, PRIVACY_FAIL, or CHECKOUT_INCOMPLETE, do NOT claim payment/form success. Report the block and any [REDACTED_*] tokens you observed.
 - actions may be [] when you are answering from the current page.
 - If intent is not met: refine (different query, filters, navigation, open a specific item, scroll for more).
   Do not repeat the exact same failed action sequence.
-- If stuck or page lacks what you need, say so in reasoning and try an alternate path — do not invent facts.
-- Prefer structured "Product / result listings" rows (title + price) when present —
+- If stuck or page lacks what you need, say so in reasoning and try an alternate path  -  do not invent facts.
+- Prefer structured "Product / result listings" rows (title + price) when present  - 
   they are extracted from the DOM including prices that may not appear in plain visible text.
 - Prefer stable selectors from the markdown (id, name, aria-label, placeholder, role).
 - After fill on a search/input, click the matching submit/control when needed.
 - Use wait when the page will change. Never invent passwords/secrets. Never ask the user questions in JSON.
 """
 
-FORCE_ANSWER_PROMPT = """This is the FINAL turn. You MUST finish now — no more browsing actions.
+FORCE_ANSWER_PROMPT = """This is the FINAL turn. You MUST finish now  -  no more browsing actions.
 
 Return ONLY valid JSON:
 {
@@ -260,7 +261,7 @@ def _normalize_result(
         return result
 
     if result.done and not result.answer:
-        # Incomplete finish — keep the loop going.
+        # Incomplete finish  -  keep the loop going.
         result.done = False
         result.reasoning = (
             (result.reasoning or '')
@@ -303,7 +304,7 @@ async def plan_actions(
     prior = prior_results or []
     system = FORCE_ANSWER_PROMPT if force_answer else SYSTEM_PROMPT
     turn_focus = (
-        'FINALIZE: intent was met or time is up — answer from evidence only.'
+        'FINALIZE: intent was met or time is up  -  answer from evidence only.'
         if force_answer
         else (
             'First turn: infer intent, inspect the page, plan the first useful actions.'

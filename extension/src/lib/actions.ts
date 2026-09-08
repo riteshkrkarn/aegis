@@ -1,5 +1,6 @@
 import type { AgentAction } from './types'
 import { buildSelector } from './domToMd'
+import { scrubFillValue } from './piiCanaries'
 
 function resolveElement(selector: string): Element | null {
   try {
@@ -25,10 +26,14 @@ export async function executeAction(action: AgentAction): Promise<string> {
         | HTMLTextAreaElement
         | null
       if (!el) throw new Error(`No element for selector: ${action.selector}`)
+      const scrubbed = scrubFillValue(action.value)
       el.focus()
-      el.value = action.value ?? ''
+      el.value = scrubbed.value
       el.dispatchEvent(new Event('input', { bubbles: true }))
       el.dispatchEvent(new Event('change', { bubbles: true }))
+      if (scrubbed.blocked) {
+        return `fill blocked for ${action.selector}: ${scrubbed.reason}`
+      }
       return `filled ${action.selector}`
     }
     case 'scroll': {

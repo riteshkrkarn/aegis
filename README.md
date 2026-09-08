@@ -1,4 +1,4 @@
-# SIH26171 — Browser AI Agent
+# SIH26171  -  Browser AI Agent
 
 Privacy-first Chrome extension that completes web tasks for you. Sensitive data is masked locally before anything reaches the server; the server returns JSON actions the extension executes on the page.
 
@@ -16,7 +16,7 @@ User task
   → Extension executes on the page
 ```
 
-The server never receives raw screenshots — only sanitized Markdown + the user task.
+The server never receives raw screenshots  -  only sanitized Markdown + the user task.
 
 ## Repo layout
 
@@ -65,7 +65,7 @@ This writes the loadable extension into `extension/dist`.
 
 ### 3. Run in Chrome (browser steps)
 
-1. **Start the backend** (if it is not already running) — see step 1. Confirm `http://127.0.0.1:8001/health` returns `{"status":"ok"}`.
+1. **Start the backend** (if it is not already running)  -  see step 1. Confirm `http://127.0.0.1:8001/health` returns `{"status":"ok"}`.
 2. **(Optional) Start the smoke test page** in a second terminal:
 
    ```bash
@@ -82,7 +82,8 @@ This writes the loadable extension into `extension/dist`.
 4. **Open a page to control**
    - Smoke page: `http://127.0.0.1:8765/smoke.html`
    - PII stress demo (clinic discharge): `http://127.0.0.1:8765/pii-demo.html`
-   - Or any normal `http(s)` website (avoid `chrome://` pages — content scripts do not run there)
+   - Safe submit demo (no patient PII): `http://127.0.0.1:8765/safe-demo.html`
+   - Or any normal `http(s)` website (avoid `chrome://` pages  -  content scripts do not run there)
 5. **Run a task**
    - Click the extension icon in the toolbar (puzzle piece → pin **SIH Browser AI Agent** if needed)
    - In the popup, type a task, e.g. `Click the submit button`
@@ -95,7 +96,7 @@ This writes the loadable extension into `extension/dist`.
 
 **Notes**
 - The popup talks to the page via the background + content script; the active tab must be the page you want controlled.
-- The extension calls `http://127.0.0.1:8001` — keep FastAPI on that host/port, or change `getApiBase()` in the extension and rebuild.
+- The extension calls `http://127.0.0.1:8001`  -  keep FastAPI on that host/port, or change `getApiBase()` in the extension and rebuild.
 - If **Run** fails with a connection error, the backend is down or blocked.
 
 ### 4. API-only smoke (no browser)
@@ -118,6 +119,6 @@ cd backend
 
 ## Docs
 
-- [extension/README.md](extension/README.md) — extension build & pipeline
-- [backend/README.md](backend/README.md) — API setup
+- [extension/README.md](extension/README.md)  -  extension build & pipeline
+- [backend/README.md](backend/README.md)  -  API setup
 - [PLAN.md](PLAN.md) · [roughIdea.md](roughIdea.md)

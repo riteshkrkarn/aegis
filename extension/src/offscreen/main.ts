@@ -85,7 +85,7 @@ function onModelProgress(info: ProgressPayload): void {
           ? Math.round(info.progress)
           : 0
 
-    // Never decrease — Transformers.js resets % per file.
+    // Never decrease  -  Transformers.js resets % per file.
     maxOverallPercent = Math.max(maxOverallPercent, Math.min(99, Math.max(0, raw)))
     // Stable label (no per-file name flicker). Filename is throttled away in emitProgress too.
     emitProgress(

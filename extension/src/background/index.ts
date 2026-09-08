@@ -16,12 +16,29 @@ import type {
 const MAX_AGENT_STEPS = 8
 
 async function getActiveTab(): Promise<chrome.tabs.Tab> {
+  // Prefer the last-focused normal browser window's active tab.
+  // Do NOT stick to a stale targetTabId from an earlier demo page — that
+  // forces chrome.tabs.update(... active) and feels like "going back" to pii-demo.
+  // windowTypes: ['normal'] excludes the agent panel popup even when it is focused.
+  try {
+    const last = await chrome.windows.getLastFocused({
+      populate: true,
+      windowTypes: ['normal'],
+    })
+    const tab = last.tabs?.find((t) => t.active) ?? last.tabs?.[0]
+    if (tab?.id && tab.url && !tab.url.startsWith('chrome-extension://')) {
+      await chrome.storage.session.set({ targetTabId: tab.id })
+      return tab
+    }
+  } catch {
+    // fall through
+  }
+
   const storedId = await getTargetTabId()
   if (typeof storedId === 'number') {
     try {
       const tab = await chrome.tabs.get(storedId)
       if (tab?.id && !tab.url?.startsWith('chrome-extension://')) {
-        // Keep it active in its own window so captureVisibleTab works.
         if (!tab.active) {
           await chrome.tabs.update(tab.id, { active: true })
         }
@@ -36,11 +53,7 @@ async function getActiveTab(): Promise<chrome.tabs.Tab> {
     populate: true,
     windowTypes: ['normal'],
   })
-  const ordered = [
-    ...windows.filter((w) => w.focused),
-    ...windows.filter((w) => !w.focused),
-  ]
-  for (const win of ordered) {
+  for (const win of windows) {
     const tab = win.tabs?.find((t) => t.active) ?? win.tabs?.[0]
     if (tab?.id && tab.url && !tab.url.startsWith('chrome-extension://')) {
       await chrome.storage.session.set({ targetTabId: tab.id })
@@ -118,6 +131,7 @@ async function runTaskPipeline(
   const tab = await getActiveTab()
   const tabId = tab.id!
   const windowId = tab.windowId
+  emitProgress('capture', `Working on: ${(tab.url || '').slice(0, 80)}`)
 
   const allActions: AgentAction[] = []
   const priorResults: string[] = []
@@ -135,7 +149,7 @@ async function runTaskPipeline(
         step === 0
           ? 'Understanding intent & observing…'
           : isLastPlan
-            ? 'Final verify — writing answer…'
+            ? 'Final verify  -  writing answer…'
             : `Observe → verify → plan (step ${step + 1}/${MAX_AGENT_STEPS})…`,
       )
 
@@ -183,8 +197,8 @@ async function runTaskPipeline(
       if (!hasActions) {
         priorResults.push(
           serverResult.done
-            ? 'done claimed without actions/answer — continue observe/verify'
-            : 'no actions — continue observe/verify against intent',
+            ? 'done claimed without actions/answer  -  continue observe/verify'
+            : 'no actions  -  continue observe/verify against intent',
         )
         continue
       }
@@ -212,7 +226,7 @@ async function runTaskPipeline(
     // Guaranteed final answer pass if the loop exited without a verified answer.
     if (!finalAnswer) {
       stage = 'capture'
-      emitProgress('server', 'Final verify — writing answer…')
+      emitProgress('server', 'Final verify  -  writing answer…')
       const observed = await observePage(tabId, windowId, MAX_AGENT_STEPS)
       lastMaskMethod = observed.maskMethod
       stage = 'server'

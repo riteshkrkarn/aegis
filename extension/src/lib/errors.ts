@@ -33,7 +33,7 @@ export function toUserFacingError(err: unknown, stageHint?: string): string {
     lower.includes('bfcache') ||
     lower.includes('message channel is closed')
   ) {
-    return 'The page navigated during actions. Retry — the agent will reattach after navigation.'
+    return 'The page navigated during actions. Retry  -  the agent will reattach after navigation.'
   }
 
   if (lower.includes('message port closed')) {

@@ -1,6 +1,6 @@
 ## Final Product Vision
 
-A Chrome browser extension that acts as a privacy-first AI agent (similar in spirit to Comet). It completes web tasks for the user — click, fill, scroll, navigate, extract — while keeping sensitive data off the wire.
+A Chrome browser extension that acts as a privacy-first AI agent (similar in spirit to Comet). It completes web tasks for the user  -  click, fill, scroll, navigate, extract  -  while keeping sensitive data off the wire.
 
 **End-state flow:**
 1. Capture the page (screenshot for vision)
@@ -11,7 +11,7 @@ A Chrome browser extension that acts as a privacy-first AI agent (similar in spi
 6. Extension executes actions on the page
 7. Sessions live in a chatbot-style history UI opened from the popup
 
-**Hard rule:** the server never sees raw screen pixels — only sanitized Markdown + the user task.
+**Hard rule:** the server never sees raw screen pixels  -  only sanitized Markdown + the user task.
 
 **Stack (locked):**
 - Client: Chrome MV3, TypeScript, Transformers.js VLM (not WebLLM)
@@ -54,7 +54,7 @@ User task
 ### Left
 - [x] Wire a real **Transformers.js VLM** for screenshot-aware PII masking (SmolVLM-256M in offscreen; regex fallback remains)
 - [ ] Harden JSON action schema, multi-step loops, and error recovery
-- [ ] Easy vs difficult **routing** (local VLM vs server) — criteria TBD
+- [ ] Easy vs difficult **routing** (local VLM vs server)  -  criteria TBD
 - [ ] Session history UX: popup → chatbot-style page with all past sessions
 - [ ] Choose / evaluate optimal local VLM + server model
 - [ ] Richer agentic server workflows (tools, planning loops) on FastAPI
@@ -76,6 +76,6 @@ User task
 - FastAPI chosen for future agentic tooling
 
 ## Feasibility notes
-- Transformers.js VLMs in-browser are proven but latency-sensitive — keep models small
+- Transformers.js VLMs in-browser are proven but latency-sensitive  -  keep models small
 - MVP always offloads reasoning to the server after masking to ship sooner
 - Main challenge remains mask quality vs speed on-device

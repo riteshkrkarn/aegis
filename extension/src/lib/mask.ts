@@ -6,6 +6,7 @@
  */
 import { ensureOffscreenDocument } from './offscreen'
 import { emitProgress } from './progress'
+import { redactCanariesInText } from './piiCanaries'
 import type { OffscreenFindPiiMessage, PiiFinding } from './types'
 
 const PII_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
@@ -41,9 +42,10 @@ export interface MaskResult {
 
 /** Apply placeholder PII redaction to markdown text. */
 export function maskPiiInText(text: string): string {
-  let masked = text
+  // Names/addresses/demo canaries first (flexible whitespace).
+  let masked = redactCanariesInText(text)
   for (const { name, pattern } of PII_PATTERNS) {
-    masked = masked.replace(pattern, (match) => {
+    masked = masked.replace(pattern, () => {
       return `[REDACTED_${name.toUpperCase()}]`
     })
   }
@@ -60,7 +62,8 @@ export function maskPiiInText(text: string): string {
     /(password|passwd|pwd)\s*[:=]\s*\S+/gi,
     '$1: [REDACTED_PASSWORD]',
   )
-  return masked
+  // Second pass in case regex left adjacent canary fragments.
+  return redactCanariesInText(masked)
 }
 
 /** Replace VLM-reported values in markdown (longest first). */
