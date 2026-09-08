@@ -48,6 +48,10 @@ function setStatus(text: string, kind: 'ok' | 'error' | 'info' = 'info') {
   statusEl.textContent = text
   statusEl.classList.toggle('ok', kind === 'ok')
   statusEl.classList.toggle('error', kind === 'error')
+  // Keep the full answer above the window chrome / scroll clip.
+  requestAnimationFrame(() => {
+    statusEl.scrollIntoView({ block: 'end', behavior: 'smooth' })
+  })
 }
 
 function setStepState(li: HTMLLIElement, state: string) {
@@ -105,6 +109,8 @@ function markStage(stage: PipelineStage, label: string, percent?: number) {
   }
 
   // Agent loops re-observe: allow checklist to restart from earlier stages.
+  // Ignore stale model_download events once we've moved past that step —
+  // Transformers.js can emit late "99%" callbacks that would overwrite Planning.
   if (idx < highestStageIdx && stage !== 'done') {
     if (
       stage === 'capture' ||
@@ -114,15 +120,6 @@ function markStage(stage: PipelineStage, label: string, percent?: number) {
       stage === 'execute'
     ) {
       highestStageIdx = idx
-    } else if (stage === 'model_download') {
-      progressLabelEl.textContent = label
-      if (typeof pct === 'number') {
-        progressBarEl.className = 'bar-fill'
-        progressBarEl.style.width = `${Math.max(4, Math.min(100, pct))}%`
-        const active = stepEls.find((li) => li.dataset.stage === 'model_download')
-        if (active) setStepState(active, `${pct}%`)
-      }
-      return
     } else {
       return
     }

@@ -3,6 +3,10 @@
  * Runs in the content-script context where `document` is available.
  */
 
+/** Must stay in sync with resolveElement() in actions.ts (nth-of-type-hint indices). */
+export const INTERACTIVE_SELECTOR =
+  'input, button, textarea, select, [role="button"], a[href], [onclick]'
+
 function isVisible(el: Element): boolean {
   const html = el as HTMLElement
   if (html.hidden) return false
@@ -134,12 +138,13 @@ function describeInteractive(el: Element, index: number): string | null {
     if (clipped) valueAttr = `value=${clipped}`
   }
 
-  const selectorParts: string[] = []
-  if (el.id) selectorParts.push(`#${CSS.escape(el.id)}`)
-  else if (name) selectorParts.push(`${tag}[name="${name}"]`)
-  else selectorParts.push(`${tag}:nth-of-type-hint(${index})`)
-
-  const selector = selectorParts[0]
+  // Prefer real CSS; fall back to index hint (resolved in actions.ts, not querySelector).
+  let selector: string
+  if (el.id) selector = `#${CSS.escape(el.id)}`
+  else if (name) selector = `${tag}[name="${CSS.escape(name)}"]`
+  else if (aria) selector = `${tag}[aria-label="${CSS.escape(aria)}"]`
+  else if (placeholder) selector = `${tag}[placeholder="${CSS.escape(placeholder)}"]`
+  else selector = `${tag}:nth-of-type-hint(${index})`
   const meta = [
     tag + id,
     type ? `type=${type}` : null,
@@ -179,9 +184,7 @@ export function documentToMarkdown(doc: Document = document): string {
   lines.push(bodyText || '_No visible text._')
   lines.push('', '## Interactive elements', '')
 
-  const interactive = doc.querySelectorAll(
-    'input, button, textarea, select, [role="button"], a[href], [onclick]',
-  )
+  const interactive = doc.querySelectorAll(INTERACTIVE_SELECTOR)
 
   let count = 0
   const MAX_INTERACTIVE = 70

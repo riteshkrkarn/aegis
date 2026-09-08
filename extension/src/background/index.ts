@@ -105,7 +105,13 @@ async function observePage(
   const markdown = await requestMarkdown(tabId)
 
   if (step === 0) {
-    emitProgress('model_download', 'Preparing privacy model…')
+    const warm = await chrome.storage.session.get('privacyModelReady')
+    emitProgress(
+      'model_download',
+      warm.privacyModelReady
+        ? 'Using cached privacy model…'
+        : 'Preparing privacy model…',
+    )
   } else {
     emitProgress('mask', 'Refreshing privacy mask…')
   }

@@ -62,7 +62,10 @@ Autonomy rules:
 - If stuck or page lacks what you need, say so in reasoning and try an alternate path  -  do not invent facts.
 - Prefer structured "Product / result listings" rows (title + price) when present  - 
   they are extracted from the DOM including prices that may not appear in plain visible text.
-- Prefer stable selectors from the markdown (id, name, aria-label, placeholder, role).
+- Prefer stable selectors from the markdown (id, name, aria-label, placeholder).
+- Copy the exact `selector=` value from an Interactive elements row. Those values are executable
+  (including `tag:nth-of-type-hint(N)` index hints). Do NOT invent vague selectors like
+  `button`, `button[type=button]`, or `a` — they match the wrong control or none.
 - After fill on a search/input, click the matching submit/control when needed.
 - Use wait when the page will change. Never invent passwords/secrets. Never ask the user questions in JSON.
 """

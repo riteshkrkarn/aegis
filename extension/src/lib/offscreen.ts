@@ -13,6 +13,14 @@ async function hasOffscreenDocument(): Promise<boolean> {
   return chrome.offscreen.hasDocument()
 }
 
+async function warmPrivacyModel(): Promise<void> {
+  try {
+    await chrome.runtime.sendMessage({ type: 'OFFSCREEN_WARM' })
+  } catch {
+    // Offscreen may still be booting; FIND_PII will load on demand.
+  }
+}
+
 /** Ensure the Transformers.js offscreen document exists (idempotent). */
 export async function ensureOffscreenDocument(): Promise<void> {
   if (await hasOffscreenDocument()) return
@@ -29,7 +37,10 @@ export async function ensureOffscreenDocument(): Promise<void> {
       justification:
         'Run local Transformers.js VLM to mask PII before any server call',
     })
-    .then(() => undefined)
+    .then(async () => {
+      // Prefetch weights into memory so later Runs reuse the warm model.
+      await warmPrivacyModel()
+    })
     .finally(() => {
       creating = null
     })

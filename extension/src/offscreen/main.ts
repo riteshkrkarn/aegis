@@ -17,6 +17,7 @@ env.useBrowserCache = true
 const MODEL_ID = 'HuggingFaceTB/SmolVLM-256M-Instruct'
 const MAX_MARKDOWN_CHARS = 2500
 const MAX_NEW_TOKENS = 256
+const KEEP_ALIVE_MS = 20_000
 
 type Processor = Awaited<ReturnType<typeof AutoProcessor.from_pretrained>>
 type VisionModel = Awaited<ReturnType<typeof AutoModelForVision2Seq.from_pretrained>>
@@ -31,6 +32,8 @@ type ProgressPayload = {
 let processorPromise: Promise<Processor> | null = null
 let modelPromise: Promise<VisionModel> | null = null
 let modelReady = false
+/** True once we observe a real network download (vs cache hydrate). */
+let sawNetworkDownload = false
 
 async function pickDevice(): Promise<'webgpu' | 'wasm'> {
   try {
@@ -48,8 +51,18 @@ async function pickDevice(): Promise<'webgpu' | 'wasm'> {
 const fileProgress = new Map<string, { loaded: number; total: number }>()
 let maxOverallPercent = 0
 
+function loadingLabel(percent: number): string {
+  // Transformers.js emits the same progress events for cache hits and network fetches.
+  const verb = sawNetworkDownload ? 'Downloading' : 'Loading'
+  return `${verb} privacy model… ${percent}%`
+}
+
 function onModelProgress(info: ProgressPayload): void {
   if (modelReady) return
+
+  if (info.status === 'download') {
+    sawNetworkDownload = true
+  }
 
   if (info.status === 'progress') {
     const file = info.file || 'model'
@@ -87,38 +100,33 @@ function onModelProgress(info: ProgressPayload): void {
 
     // Never decrease  -  Transformers.js resets % per file.
     maxOverallPercent = Math.max(maxOverallPercent, Math.min(99, Math.max(0, raw)))
-    // Stable label (no per-file name flicker). Filename is throttled away in emitProgress too.
-    emitProgress(
-      'model_download',
-      `Downloading privacy model… ${maxOverallPercent}%`,
-      maxOverallPercent,
-    )
+    emitProgress('model_download', loadingLabel(maxOverallPercent), maxOverallPercent)
     return
   }
 
   if (info.status === 'initiate' || info.status === 'download') {
-    emitProgress(
-      'model_download',
-      `Downloading privacy model… ${maxOverallPercent}%`,
-      maxOverallPercent,
-    )
+    emitProgress('model_download', loadingLabel(maxOverallPercent), maxOverallPercent)
     return
   }
 
   if (info.status === 'done') {
     maxOverallPercent = Math.max(maxOverallPercent, 95)
-    emitProgress('model_download', `Downloading privacy model… ${maxOverallPercent}%`, maxOverallPercent)
+    emitProgress('model_download', loadingLabel(maxOverallPercent), maxOverallPercent)
   }
 }
 
 async function getModel(): Promise<[Processor, VisionModel]> {
-  if (!modelReady) {
-    emitProgress(
-      'model_download',
-      'Loading local privacy model (first run may take a minute)…',
-      0,
-    )
+  if (modelReady && processorPromise && modelPromise) {
+    return Promise.all([processorPromise, modelPromise])
   }
+
+  emitProgress(
+    'model_download',
+    sawNetworkDownload || maxOverallPercent > 0
+      ? loadingLabel(maxOverallPercent)
+      : 'Loading privacy model (cached after first run)…',
+    maxOverallPercent,
+  )
 
   processorPromise ??= AutoProcessor.from_pretrained(MODEL_ID, {
     progress_callback: onModelProgress,
@@ -144,9 +152,21 @@ async function getModel(): Promise<[Processor, VisionModel]> {
   const pair = await Promise.all([processorPromise, modelPromise])
   if (!modelReady) {
     modelReady = true
-    emitProgress('model_download', 'Privacy model ready', 100)
+    emitProgress(
+      'model_download',
+      sawNetworkDownload ? 'Privacy model ready' : 'Privacy model ready (cached)',
+      100,
+    )
+    void chrome.storage.session.set({ privacyModelReady: true })
   }
   return pair
+}
+
+/** Keep the offscreen document alive so the in-memory model is not dropped. */
+function startKeepAlive(): void {
+  window.setInterval(() => {
+    void chrome.runtime.getPlatformInfo().catch(() => undefined)
+  }, KEEP_ALIVE_MS)
 }
 
 function buildPrompt(pageMarkdown: string): string {
@@ -239,9 +259,23 @@ async function findPii(
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  const msg = message as OffscreenFindPiiMessage
-  if (msg?.type !== 'OFFSCREEN_FIND_PII') return false
+  const type = (message as { type?: string } | null)?.type
 
+  if (type === 'OFFSCREEN_WARM') {
+    getModel()
+      .then(() => sendResponse({ ok: true, ready: modelReady }))
+      .catch((err: unknown) => {
+        sendResponse({
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      })
+    return true
+  }
+
+  if (type !== 'OFFSCREEN_FIND_PII') return false
+
+  const msg = message as OffscreenFindPiiMessage
   findPii(msg.screenshotDataUrl, msg.pageMarkdown)
     .then((findings) => {
       sendResponse({ ok: true, findings } satisfies {
@@ -260,4 +294,5 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true
 })
 
+startKeepAlive()
 console.info('[SIH Offscreen] VLM host ready')

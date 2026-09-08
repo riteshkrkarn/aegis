@@ -2,9 +2,9 @@ const TARGET_TAB_KEY = 'targetTabId'
 const PANEL_BOUNDS_KEY = 'agentPanelBounds'
 const POPUP_PAGE = 'src/popup/index.html'
 
-/** Fixed extension UI size — never fullscreen / maximized. */
-export const POPUP_WIDTH = 380
-export const POPUP_HEIGHT = 600
+/** Outer window size. Inner document uses 100% of the client area (title bar excluded). */
+export const POPUP_WIDTH = 400
+export const POPUP_HEIGHT = 640
 
 type PanelBounds = { left: number; top: number }
 

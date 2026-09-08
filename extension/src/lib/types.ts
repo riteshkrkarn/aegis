@@ -53,6 +53,10 @@ export type OffscreenFindPiiMessage = {
   pageMarkdown: string
 }
 
+export type OffscreenWarmMessage = {
+  type: 'OFFSCREEN_WARM'
+}
+
 export type PipelineProgressMessage = {
   type: 'PIPELINE_PROGRESS'
   stage: PipelineStage
@@ -76,3 +80,4 @@ export type PipelineMessage =
     }
   | PipelineProgressMessage
   | OffscreenFindPiiMessage
+  | OffscreenWarmMessage
