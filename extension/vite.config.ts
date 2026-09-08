@@ -18,7 +18,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         offscreen: resolve(__dirname, 'src/offscreen/index.html'),
-        // Persistent agent panel (opened via chrome.windows, not action popup)
         popup: resolve(__dirname, 'src/popup/index.html'),
       },
     },

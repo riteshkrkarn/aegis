@@ -1,5 +1,6 @@
 import type { PipelineMessage, PipelineStage } from '../lib/types'
 import { toUserFacingError } from '../lib/errors'
+import { rememberSourceTab, ensureCompactPopupWindow } from '../lib/agentPanel'
 import {
   DEFAULT_MODEL_ID,
   MODEL_OPTIONS,
@@ -8,6 +9,10 @@ import {
   type ModelChoiceId,
   type ModelOption,
 } from '../lib/models'
+
+document.addEventListener('contextmenu', (event) => {
+  event.preventDefault()
+})
 
 const MODEL_STORAGE_KEY = 'plannerModelId'
 
@@ -268,4 +273,15 @@ runBtn.addEventListener('click', async () => {
   }
 })
 
+async function rememberActiveTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+  await rememberSourceTab(tab)
+}
+
+void ensureCompactPopupWindow()
+void rememberActiveTab()
 void initModelSelect()
+
+window.addEventListener('resize', () => {
+  void ensureCompactPopupWindow()
+})

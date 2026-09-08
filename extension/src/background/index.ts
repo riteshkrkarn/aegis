@@ -5,7 +5,7 @@ import { ensureContentScript } from '../lib/contentBridge'
 import { executeActionsSafely } from '../lib/execute'
 import { toUserFacingError } from '../lib/errors'
 import { emitProgress } from '../lib/progress'
-import { getTargetTabId, openAgentPanel } from '../lib/agentPanel'
+import { getTargetTabId } from '../lib/agentPanel'
 import type {
   AgentAction,
   MaskMethod,
@@ -262,10 +262,6 @@ async function runTaskPipeline(
     )
   }
 }
-
-chrome.action.onClicked.addListener((tab) => {
-  void openAgentPanel(tab)
-})
 
 chrome.runtime.onMessage.addListener((message: PipelineMessage, _sender, sendResponse) => {
   if (message.type !== 'RUN_TASK') return false

@@ -6,7 +6,7 @@ export default defineManifest({
   description: 'Privacy-first browser AI agent: local PII masking, server reasoning, JSON actions.',
   version: '0.1.0',
   action: {
-    // No default_popup  -  icon opens a persistent panel window instead.
+    default_popup: 'src/popup/index.html',
     default_title: 'Browser AI Agent',
   },
   background: {

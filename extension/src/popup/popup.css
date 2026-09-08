@@ -9,6 +9,9 @@
   --danger: #ef4444;      /* Red 500 */
   --danger-soft: rgba(239, 68, 68, 0.1);
   --border: #262626;      /* Neutral 800 */
+  --scroll-track: #0a0a0a;
+  --scroll-thumb: #404040;
+  --scroll-thumb-hover: #ff5a5f;
   --radius: 8px;
   --radius-sm: 6px;
   --transition: 0.15s ease-in-out;
@@ -21,20 +24,94 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+
+/* Compact extension popup — fixed size, whole UI scrolls inside */
+html {
+  width: 380px;
+  min-width: 380px;
+  max-width: 380px;
+  height: 600px;
+  min-height: 600px;
+  max-height: 600px;
+  overflow: hidden;
+  background-color: var(--bg);
 }
 
 body {
-  min-width: 360px;
-  max-width: 420px;
-  min-height: 100vh;
+  width: 380px;
+  min-width: 380px;
+  max-width: 380px;
+  height: 600px;
+  min-height: 600px;
+  max-height: 600px;
+  margin: 0;
+  overflow: hidden;
   background-color: var(--bg);
   color: var(--ink);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+textarea,
+input,
+select {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/*
+ * Theme scrollbars (carbon track + muted thumb, coral on hover).
+ * Applied globally so Windows/Chrome never fall back to the light system bar.
+ */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: var(--scroll-track);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scroll-track);
+  border-left: 1px solid var(--border);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--scroll-track);
+  background-clip: padding-box;
+  min-height: 36px;
+}
+
+*::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:active {
+  background: var(--scroll-thumb-hover);
+  border: 2px solid var(--scroll-track);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: var(--scroll-track);
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .shell {
-  padding: 18px;
+  width: 100%;
+  height: 100%;
+  padding: 18px 10px 24px 18px;
   display: grid;
   gap: 16px;
+  align-content: start;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
 }
 
 .topbar {
@@ -120,8 +197,29 @@ select {
 }
 
 textarea {
-  resize: vertical;
+  resize: none;
   min-height: 72px;
+  max-height: 120px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) #000000;
+}
+
+textarea::-webkit-scrollbar-track {
+  background: #000000;
+  border-left: 1px solid var(--border);
+}
+
+textarea::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-color: #000000;
+}
+
+textarea::-webkit-scrollbar-thumb:hover,
+textarea::-webkit-scrollbar-thumb:active {
+  background: var(--scroll-thumb-hover);
+  border-color: #000000;
 }
 
 select:focus, textarea:focus {
@@ -266,7 +364,7 @@ button:disabled {
   font-size: 10px;
   text-transform: uppercase;
   font-weight: 600;
-  opacity: 0; 
+  opacity: 0;
 }
 
 .steps li.active {
@@ -296,6 +394,7 @@ button:disabled {
 .status {
   min-height: 38px;
   padding: 10px 12px;
+  margin-bottom: 4px;
   border-radius: var(--radius-sm);
   background: #000000;
   border: 1px solid var(--border);
