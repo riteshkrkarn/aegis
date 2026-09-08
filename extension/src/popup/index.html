@@ -19,22 +19,24 @@
         </button>
       </header>
 
-      <label class="field" for="model">
-        <span>Planner model</span>
-        <select id="model"></select>
-        <span id="model-hint" class="hint"></span>
-      </label>
+      <div class="form-block">
+        <label class="field" for="model">
+          <span>Planner model</span>
+          <select id="model"></select>
+          <span id="model-hint" class="hint"></span>
+        </label>
 
-      <label class="field" for="task">
-        <span>Task</span>
-        <textarea
-          id="task"
-          rows="3"
-          placeholder="e.g. Click the submit button"
-        ></textarea>
-      </label>
+        <label class="field" for="task">
+          <span>Task</span>
+          <textarea
+            id="task"
+            rows="4"
+            placeholder="e.g. Click the submit button"
+          ></textarea>
+        </label>
 
-      <button id="run" type="button">Run</button>
+        <button id="run" type="button">Run</button>
+      </div>
 
       <section id="progress" class="progress" aria-live="polite">
         <div class="progress-head">

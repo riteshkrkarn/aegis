@@ -6,14 +6,14 @@ export default defineManifest({
   description: 'Privacy-first browser AI agent: local PII masking, server reasoning, JSON actions.',
   version: '0.1.0',
   action: {
-    default_popup: 'src/popup/index.html',
+    // No default_popup — open a detachable OS window so the panel can be moved.
     default_title: 'Browser AI Agent',
   },
   background: {
     service_worker: 'src/background/index.ts',
     type: 'module',
   },
-  permissions: ['activeTab', 'scripting', 'tabs', 'storage', 'offscreen'],
+  permissions: ['activeTab', 'scripting', 'tabs', 'storage', 'offscreen', 'windows'],
   host_permissions: [
     'http://127.0.0.1:8001/*',
     'http://localhost:8001/*',

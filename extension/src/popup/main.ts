@@ -1,6 +1,6 @@
 import type { PipelineMessage, PipelineStage } from '../lib/types'
 import { toUserFacingError } from '../lib/errors'
-import { rememberSourceTab, ensureCompactPopupWindow } from '../lib/agentPanel'
+import { ensureCompactPopupWindow, savePanelBounds } from '../lib/agentPanel'
 import {
   DEFAULT_MODEL_ID,
   MODEL_OPTIONS,
@@ -225,7 +225,7 @@ chrome.runtime.onMessage.addListener((message: PipelineMessage) => {
 })
 
 closeBtn.addEventListener('click', () => {
-  window.close()
+  void savePanelBounds().finally(() => window.close())
 })
 
 runBtn.addEventListener('click', async () => {
@@ -273,15 +273,13 @@ runBtn.addEventListener('click', async () => {
   }
 })
 
-async function rememberActiveTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  await rememberSourceTab(tab)
-}
-
 void ensureCompactPopupWindow()
-void rememberActiveTab()
 void initModelSelect()
 
 window.addEventListener('resize', () => {
   void ensureCompactPopupWindow()
+})
+
+window.addEventListener('pagehide', () => {
+  void savePanelBounds()
 })

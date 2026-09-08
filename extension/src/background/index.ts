@@ -5,7 +5,12 @@ import { ensureContentScript } from '../lib/contentBridge'
 import { executeActionsSafely } from '../lib/execute'
 import { toUserFacingError } from '../lib/errors'
 import { emitProgress } from '../lib/progress'
-import { getTargetTabId } from '../lib/agentPanel'
+import {
+  getTargetTabId,
+  openOrFocusAgentPanel,
+  rememberSourceTab,
+  savePanelBounds,
+} from '../lib/agentPanel'
 import type {
   AgentAction,
   MaskMethod,
@@ -287,6 +292,19 @@ chrome.runtime.onMessage.addListener((message: PipelineMessage, _sender, sendRes
     })
 
   return true
+})
+
+// Detached popup window (draggable) instead of the fixed toolbar popup.
+chrome.action.onClicked.addListener((tab) => {
+  void (async () => {
+    await rememberSourceTab(tab)
+    await openOrFocusAgentPanel()
+  })()
+})
+
+chrome.windows.onBoundsChanged.addListener((win) => {
+  if (win.type !== 'popup') return
+  void savePanelBounds(win)
 })
 
 console.info('[SIH Agent] background ready')

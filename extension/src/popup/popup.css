@@ -1,19 +1,24 @@
 :root {
   color-scheme: dark;
-  --bg: #0a0a0a;          /* Carbon Black */
-  --panel: #171717;       /* Dark Gray Element */
+  --bg: #0a0a0a;
+  --panel: #171717;
   --panel-hover: #262626;
   --ink: #ffffff;
-  --muted: #a3a3a3;       /* Neutral 400 */
-  --accent: #ff5a5f;      /* Punchy Coral */
-  --danger: #ef4444;      /* Red 500 */
+  --muted: #a3a3a3;
+  --accent: #ff5a5f;
+  --danger: #ef4444;
   --danger-soft: rgba(239, 68, 68, 0.1);
-  --border: #262626;      /* Neutral 800 */
+  --border: #262626;
   --scroll-track: #0a0a0a;
   --scroll-thumb: #404040;
   --scroll-thumb-hover: #ff5a5f;
-  --radius: 8px;
-  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-sm: 8px;
+  --space-xs: 6px;
+  --space-sm: 10px;
+  --space-md: 14px;
+  --space-lg: 20px;
+  --space-xl: 24px;
   --transition: 0.15s ease-in-out;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 13px;
@@ -28,7 +33,6 @@
   scrollbar-color: var(--scroll-thumb) var(--scroll-track);
 }
 
-/* Compact extension popup — fixed size, whole UI scrolls inside */
 html {
   width: 380px;
   min-width: 380px;
@@ -62,10 +66,6 @@ select {
   -webkit-user-select: text;
 }
 
-/*
- * Theme scrollbars (carbon track + muted thumb, coral on hover).
- * Applied globally so Windows/Chrome never fall back to the light system bar.
- */
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -105,10 +105,10 @@ select {
 .shell {
   width: 100%;
   height: 100%;
-  padding: 18px 10px 24px 18px;
-  display: grid;
-  gap: 16px;
-  align-content: start;
+  padding: var(--space-lg) 12px var(--space-xl) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
   overflow-x: hidden;
   overflow-y: scroll;
   scrollbar-gutter: stable;
@@ -118,9 +118,15 @@ select {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 12px;
+  gap: var(--space-md);
+  padding-bottom: var(--space-md);
   border-bottom: 1px solid var(--border);
+}
+
+.topbar > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
 .close-btn {
@@ -132,20 +138,21 @@ select {
   color: var(--muted);
   font-weight: 500;
   font-size: 11px;
-  padding: 5px 12px;
+  padding: 7px 12px;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  box-shadow: none;
   transition: all var(--transition);
 }
 
 .close-btn:hover {
   background: var(--panel-hover);
   color: var(--ink);
+  border-color: #404040;
 }
 
 .brand {
   font-size: 10px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--accent);
   font-weight: 600;
@@ -155,34 +162,48 @@ h1 {
   font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  margin-top: 2px;
+  line-height: 1.25;
 }
 
 .sub {
   font-size: 12px;
   color: var(--muted);
-  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.form-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
 }
 
 .field {
   display: grid;
-  gap: 6px;
+  gap: var(--space-xs);
   font-weight: 500;
   color: #e5e5e5;
+}
+
+.field > span:first-child {
+  font-size: 12px;
+  letter-spacing: 0.01em;
 }
 
 .hint {
   font-size: 11px;
   color: var(--muted);
+  line-height: 1.4;
+  min-height: 1.2em;
 }
 
-select, textarea {
+select,
+textarea {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: #000000; /* Deep black inputs */
+  background: #000000;
   color: var(--ink);
-  padding: 8px 12px;
+  padding: 10px 12px;
   font: inherit;
   transition: all var(--transition);
 }
@@ -193,15 +214,17 @@ select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23a3a3a3' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
-  padding-right: 30px;
+  padding-right: 32px;
+  min-height: 40px;
 }
 
 textarea {
   resize: none;
-  min-height: 72px;
-  max-height: 120px;
+  min-height: 88px;
+  max-height: 140px;
   overflow-x: hidden;
   overflow-y: auto;
+  line-height: 1.45;
   scrollbar-width: thin;
   scrollbar-color: var(--scroll-thumb) #000000;
 }
@@ -222,14 +245,14 @@ textarea::-webkit-scrollbar-thumb:active {
   border-color: #000000;
 }
 
-select:focus, textarea:focus {
+select:focus,
+textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent); /* sharp focus ring */
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
-/* Minimal Flat Primary Button */
-button {
+#run {
   width: 100%;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -237,24 +260,25 @@ button {
   color: #ffffff;
   font-weight: 600;
   font-size: 13px;
-  padding: 10px 14px;
+  padding: 12px 14px;
   cursor: pointer;
   transition: all var(--transition);
+  margin-top: 2px;
 }
 
-button:hover:not(:disabled) {
-  background: #ff474d; /* Slightly deeper coral */
+#run:hover:not(:disabled) {
+  background: #ff474d;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(255, 90, 95, 0.2);
 }
 
-button:active:not(:disabled) {
+#run:active:not(:disabled) {
   transform: translateY(0);
   background: #e0484d;
   box-shadow: none;
 }
 
-button:disabled {
+#run:disabled {
   opacity: 0.4;
   cursor: not-allowed;
   filter: grayscale(1);
@@ -262,8 +286,8 @@ button:disabled {
 
 .progress {
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: var(--space-md);
+  padding: var(--space-md) 16px;
   border-radius: var(--radius);
   background: var(--panel);
   border: 1px solid var(--border);
@@ -272,29 +296,35 @@ button:disabled {
 .progress-head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: var(--space-sm);
+}
+
+.progress-head > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
 }
 
 .progress-title {
   font-size: 10px;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
   font-weight: 600;
 }
 
 .progress-label {
-  margin-top: 2px;
   font-size: 12px;
   font-weight: 500;
+  line-height: 1.35;
 }
 
 .spinner {
   width: 14px;
   height: 14px;
-  margin-top: 2px;
+  margin-top: 3px;
   border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.1);
+  border: 2px solid rgba(255, 255, 255, 0.1);
   border-top-color: var(--accent);
   flex: 0 0 auto;
   animation: spin 0.8s linear infinite;
@@ -317,7 +347,11 @@ button:disabled {
   background: var(--accent);
   transition: width 0.3s ease;
 }
-.bar-fill.idle { width: 0%; }
+
+.bar-fill.idle {
+  width: 0%;
+}
+
 .bar-fill.indeterminate {
   width: 40%;
   animation: indeterminate 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
@@ -326,25 +360,26 @@ button:disabled {
 .steps {
   list-style: none;
   display: grid;
-  gap: 4px;
+  gap: 2px;
+  padding-top: 2px;
 }
 
 .steps li {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-sm);
   font-size: 12px;
   color: var(--muted);
-  padding: 6px 8px 6px 20px;
-  border-radius: 4px;
+  padding: 8px 10px 8px 22px;
+  border-radius: 6px;
   position: relative;
 }
 
 .steps li::before {
   content: "";
   position: absolute;
-  left: 6px;
+  left: 8px;
   top: 50%;
   width: 6px;
   height: 6px;
@@ -364,6 +399,7 @@ button:disabled {
   font-size: 10px;
   text-transform: uppercase;
   font-weight: 600;
+  letter-spacing: 0.03em;
   opacity: 0;
 }
 
@@ -371,56 +407,78 @@ button:disabled {
   color: var(--ink);
   background: #1f1f1f;
 }
-.steps li.active::before { background: var(--accent); }
+
+.steps li.active::before {
+  background: var(--accent);
+}
+
 .steps li.active .step-state {
   color: var(--accent);
   opacity: 1;
 }
 
-.steps li.done { color: #d4d4d8; }
-.steps li.done::before { background: #737373; }
-.steps li.done .step-state { opacity: 0.7; }
+.steps li.done {
+  color: #d4d4d8;
+}
+
+.steps li.done::before {
+  background: #737373;
+}
+
+.steps li.done .step-state {
+  opacity: 0.7;
+}
 
 .steps li.failed {
   color: var(--danger);
   background: var(--danger-soft);
 }
-.steps li.failed::before { background: var(--danger); }
+
+.steps li.failed::before {
+  background: var(--danger);
+}
+
 .steps li.failed .step-state {
   color: var(--danger);
   opacity: 1;
 }
 
 .status {
-  min-height: 38px;
-  padding: 10px 12px;
-  margin-bottom: 4px;
+  min-height: 44px;
+  padding: 12px 14px;
+  margin-top: auto;
   border-radius: var(--radius-sm);
   background: #000000;
   border: 1px solid var(--border);
   color: var(--muted);
   font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  line-height: 1.4;
+  line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .status.error {
-  border-color: rgba(239,68,68,0.3);
-  background: rgba(239,68,68,0.05);
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.05);
   color: var(--danger);
 }
 
 .status.ok {
-  color: #10b981; /* Emerald green for OK */
+  color: #10b981;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes indeterminate {
-  0% { transform: translateX(-150%); }
-  100% { transform: translateX(350%); }
+  0% {
+    transform: translateX(-150%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
 }
