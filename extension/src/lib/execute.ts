@@ -1,4 +1,4 @@
-import type { AgentAction } from './types'
+import type { AgentAction, WitnessLogEntry } from './types'
 import { ensureContentScript } from './contentBridge'
 
 function sleep(ms: number): Promise<void> {
@@ -17,17 +17,24 @@ async function waitForTabComplete(tabId: number, timeoutMs = 20000): Promise<voi
   }
 }
 
-async function sendActions(
-  tabId: number,
-  actions: AgentAction[],
-): Promise<string[]> {
+interface SendActionsResult {
+  results: string[]
+  witnessChecks: WitnessLogEntry[]
+}
+
+async function sendActions(tabId: number, actions: AgentAction[]): Promise<SendActionsResult> {
   const response = (await chrome.tabs.sendMessage(tabId, {
     type: 'EXECUTE_ACTIONS',
     actions,
-  })) as { results?: string[]; error?: string }
+  })) as { results?: string[]; witnessChecks?: WitnessLogEntry[]; error?: string }
 
   if (response?.error) throw new Error(response.error)
-  return response.results ?? []
+  return { results: response.results ?? [], witnessChecks: response.witnessChecks ?? [] }
+}
+
+export interface ExecuteActionsSafelyResult {
+  results: string[]
+  witnessChecks: WitnessLogEntry[]
 }
 
 /**
@@ -37,8 +44,9 @@ async function sendActions(
 export async function executeActionsSafely(
   tabId: number,
   actions: AgentAction[],
-): Promise<string[]> {
+): Promise<ExecuteActionsSafelyResult> {
   const results: string[] = []
+  const witnessChecks: WitnessLogEntry[] = []
 
   for (const action of actions) {
     const before = await chrome.tabs.get(tabId)
@@ -56,7 +64,8 @@ export async function executeActionsSafely(
 
     await ensureContentScript(tabId, beforeUrl)
     const chunk = await sendActions(tabId, [action])
-    results.push(...chunk)
+    results.push(...chunk.results)
+    witnessChecks.push(...chunk.witnessChecks)
 
     // Clicks/fills may trigger in-page navigation; reattach if the page swapped.
     if (action.action === 'click' || action.action === 'fill') {
@@ -89,5 +98,5 @@ export async function executeActionsSafely(
     }
   }
 
-  return results
+  return { results, witnessChecks }
 }

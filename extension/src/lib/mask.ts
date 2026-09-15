@@ -1,12 +1,20 @@
 /**
  * Local PII masking via Transformers.js VLM (offscreen) + regex safety net.
  *
- * Approach A: VLM finds PII strings from screenshot + markdown; we redact
- * those strings in markdown before anything is sent to the server.
+ * Structured form FIELDS are now classified and tokenized at the source in
+ * domToMd.ts (see piiClassifier.ts / secureTokens.ts) — that is more
+ * accurate than pattern-matching flattened text, since it has type / name
+ * / aria / autocomplete to work with. What's left for this file is
+ * genuinely unstructured: free-standing page TEXT (an address printed on
+ * a confirmation screen, not typed into any field) and a defence-in-depth
+ * backstop in case a field's classification was missed. This is also
+ * where India-specific identifiers (Aadhaar/PAN/UPI/IFSC/vehicle-reg) are
+ * caught — the original list here only covered email/card/phone.
  */
 import { ensureOffscreenDocument } from './offscreen'
 import { emitProgress } from './progress'
 import { redactCanariesInText } from './piiCanaries'
+import { findIndiaPii } from './piiClassifier'
 import type { OffscreenFindPiiMessage, PiiFinding } from './types'
 
 const PII_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
@@ -62,6 +70,11 @@ export function maskPiiInText(text: string): string {
     /(password|passwd|pwd)\s*[:=]\s*\S+/gi,
     '$1: [REDACTED_PASSWORD]',
   )
+  // India-specific identifiers a generic email/card/phone list misses
+  // entirely — Aadhaar (checksum-validated), PAN, IFSC, UPI, vehicle reg.
+  for (const { category, value } of findIndiaPii(masked)) {
+    masked = masked.split(value).join(`[REDACTED_${category.toUpperCase().replace(/-/g, '_')}]`)
+  }
   // Second pass in case regex left adjacent canary fragments.
   return redactCanariesInText(masked)
 }

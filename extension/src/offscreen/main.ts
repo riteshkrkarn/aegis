@@ -258,6 +258,81 @@ async function findPii(
   return parseFindings(assistantOnly || raw)
 }
 
+async function cropDataUrl(
+  dataUrl: string,
+  rect: { x: number; y: number; width: number; height: number },
+): Promise<string> {
+  const img = new Image()
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve()
+    img.onerror = () => reject(new Error('failed to decode screenshot for crop'))
+    img.src = dataUrl
+  })
+
+  const width = Math.max(1, Math.round(rect.width))
+  const height = Math.max(1, Math.round(rect.height))
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('2d context unavailable for crop')
+  ctx.drawImage(img, rect.x, rect.y, width, height, 0, 0, width, height)
+  return canvas.toDataURL('image/png')
+}
+
+/**
+ * OPTIONAL second witness for the Two-Witness Actuation Guard: read just
+ * the cropped element's pixels, independent of what the DOM claims. Off
+ * by default in actions.ts (the structural check alone already defeats
+ * TOCTOU-style attacks at zero model cost) — enable once that path is
+ * confirmed working, for defence against label-spoofing / visual forgery
+ * specifically. Reuses the same local model as PII detection, with a much
+ * narrower prompt over a tiny crop, so the cost is small.
+ */
+async function readCrop(
+  screenshotDataUrl: string,
+  rect: { x: number; y: number; width: number; height: number },
+): Promise<string> {
+  const [processor, model] = await getModel()
+  const cropped = await cropDataUrl(screenshotDataUrl, rect)
+  const image = await load_image(cropped)
+
+  const messages = [
+    {
+      role: 'user',
+      content: [
+        { type: 'image', image: cropped },
+        {
+          type: 'text',
+          text: 'What text or label appears on this single UI element? Reply with just the text, nothing else.',
+        },
+      ],
+    },
+  ]
+
+  const text = processor.apply_chat_template(messages as never, {
+    add_generation_prompt: true,
+  })
+  const inputs = await processor(text, [image], {})
+  const output = (await model.generate({
+    ...inputs,
+    do_sample: false,
+    max_new_tokens: 32,
+    return_dict_in_generate: true,
+  })) as { sequences?: unknown } | unknown
+
+  const sequences =
+    output && typeof output === 'object' && 'sequences' in output && output.sequences
+      ? output.sequences
+      : output
+  const decoded = processor.batch_decode(sequences as never, { skip_special_tokens: true })
+  const raw = decoded[0] ?? ''
+  const assistantOnly = raw.includes('assistant')
+    ? raw.slice(raw.lastIndexOf('assistant') + 'assistant'.length)
+    : raw
+  return (assistantOnly || raw).trim()
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const type = (message as { type?: string } | null)?.type
 
@@ -269,6 +344,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           ok: false,
           error: err instanceof Error ? err.message : String(err),
         })
+      })
+    return true
+  }
+
+  if (type === 'OFFSCREEN_READ_CROP') {
+    const msg = message as { screenshotDataUrl: string; rect: { x: number; y: number; width: number; height: number } }
+    readCrop(msg.screenshotDataUrl, msg.rect)
+      .then((readText) => sendResponse({ ok: true, text: readText }))
+      .catch((err: unknown) => {
+        sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) })
       })
     return true
   }

@@ -38,6 +38,20 @@ export interface PiiFinding {
   value: string
 }
 
+/** One Two-Witness Actuation Guard check, logged for the integrity ledger. */
+export interface WitnessLogEntry {
+  selector: string
+  ok: boolean
+  reason?: string
+}
+
+/** A DOM-present-but-not-rendered node excluded before reaching the LLM. */
+export interface HiddenNodeLog {
+  reason: string
+  snippet: string
+  instructionLike: boolean
+}
+
 export type PipelineStage =
   | 'capture'
   | 'markdown'
@@ -57,6 +71,13 @@ export type OffscreenWarmMessage = {
   type: 'OFFSCREEN_WARM'
 }
 
+/** Optional second witness: ask the local VLM to read a cropped element. */
+export type OffscreenReadCropMessage = {
+  type: 'OFFSCREEN_READ_CROP'
+  screenshotDataUrl: string
+  rect: { x: number; y: number; width: number; height: number }
+}
+
 export type PipelineProgressMessage = {
   type: 'PIPELINE_PROGRESS'
   stage: PipelineStage
@@ -70,6 +91,7 @@ export type PipelineMessage =
   | { type: 'PING' }
   | { type: 'GET_MARKDOWN' }
   | { type: 'EXECUTE_ACTIONS'; actions: AgentAction[] }
+  | { type: 'CHECK_SKILL_MATCH'; selectors: string[] }
   | {
       type: 'PIPELINE_RESULT'
       ok: boolean
@@ -77,7 +99,10 @@ export type PipelineMessage =
       actions?: AgentAction[]
       answer?: string
       maskMethod?: MaskMethod
+      certificate?: unknown
+      certificateHash?: string
     }
   | PipelineProgressMessage
   | OffscreenFindPiiMessage
   | OffscreenWarmMessage
+  | OffscreenReadCropMessage

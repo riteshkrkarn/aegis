@@ -2,6 +2,10 @@
  * Convert a document into lightweight Markdown for the LLM.
  * Runs in the content-script context where `document` is available.
  */
+import { classifyFieldBySignals } from './piiClassifier'
+import { mintToken, resetTokenStore, tokenCount } from './secureTokens'
+import { findHiddenTextNodes, type FilteredNode } from './hiddenContentFilter'
+import { recordPlanSignature, resetPlanSignatures } from './twoWitness'
 
 /** Must stay in sync with resolveElement() in actions.ts (nth-of-type-hint indices). */
 export const INTERACTIVE_SELECTOR =
@@ -32,7 +36,6 @@ function extractPrice(root: Element): string {
   const frac = cleanText(root.querySelector('.a-price-fraction')?.textContent, 8)
   if (whole) return `${symbol}${whole}${frac ? `.${frac}` : ''}`
 
-  // Generic currency patterns inside the card
   const blob = cleanText(root.textContent, 500)
   const match = blob.match(/(?:₹|Rs\.?|INR|\$|€|£)\s*[\d,]+(?:\.\d+)?/i)
   return match ? match[0] : ''
@@ -88,15 +91,36 @@ function extractProductCards(doc: Document): string[] {
   return lines
 }
 
-function extractVisibleText(doc: Document): string {
+/**
+ * Strip any exact hidden-node snippets out of an already-assembled text
+ * blob. Pragmatic post-hoc removal (string match on the captured
+ * snippet) rather than a full text-node-level rewrite — good enough to
+ * keep genuinely hidden "fine print" injection attempts out of what
+ * reaches the LLM, while keeping .innerText's layout/whitespace handling
+ * for everything else. (A v2 could filter at the text-node level during
+ * extraction instead of after, to close the edge case where the same
+ * string also appears legitimately elsewhere.)
+ */
+function stripHiddenSnippets(text: string, findings: FilteredNode[]): string {
+  let out = text
+  for (const f of findings) {
+    if (f.snippet.length >= 8) out = out.split(f.snippet).join('')
+  }
+  return out
+}
+
+function extractVisibleText(doc: Document, hiddenFindings: FilteredNode[]): string {
   const mainEl = doc.querySelector(
     'main, [role="main"], #main, #search, .s-main-slot, #centerCol, #dp-container',
   )
   const root = (mainEl as HTMLElement | null) || doc.body
   if (!root) return ''
 
-  // Prefer innerText blocks with newlines so listings stay separable.
-  const raw = root.innerText || root.textContent || ''
+  // Detect DOM-present-but-not-rendered text (the "fine print injection"
+  // surface) before assembling what the LLM will read.
+  hiddenFindings.push(...findHiddenTextNodes(root))
+
+  const raw = stripHiddenSnippets(root.innerText || root.textContent || '', hiddenFindings)
   return raw
     .split('\n')
     .map((line) => line.replace(/\s+/g, ' ').trim())
@@ -116,11 +140,39 @@ function describeInteractive(el: Element, index: number): string | null {
   const role = el.getAttribute('role')
   const aria = el.getAttribute('aria-label')
   const placeholder = el.getAttribute('placeholder')
+  const autocomplete = el.getAttribute('autocomplete') || undefined
   const href = el.getAttribute('href')
   const text = cleanText(el.textContent, 80)
 
-  // Surface current field values in markdown so local masking can redact them.
-  // Never export password / hidden values (screenshot + password: regex cover those).
+  // Prefer real CSS; fall back to index hint (resolved in actions.ts, not querySelector).
+  let selector: string
+  if (el.id) selector = `#${CSS.escape(el.id)}`
+  else if (name) selector = `${tag}[name="${CSS.escape(name)}"]`
+  else if (aria) selector = `${tag}[aria-label="${CSS.escape(aria)}"]`
+  else if (placeholder) selector = `${tag}[placeholder="${CSS.escape(placeholder)}"]`
+  else selector = `${tag}:nth-of-type-hint(${index})`
+
+  // Two-Witness Guard: remember what this element looked like right now,
+  // so an action fired against this selector later can detect drift.
+  recordPlanSignature(selector, el)
+
+  // DOM-native classification FIRST (type/name/aria/placeholder/autocomplete)
+  // — cheap, structural, and available before any pixel/VLM pass.
+  const classification = classifyFieldBySignals({
+    tag,
+    type,
+    name: name || undefined,
+    aria: aria || undefined,
+    placeholder: placeholder || undefined,
+    autocomplete,
+    id: el.id || undefined,
+  })
+
+  // Surface current field values in markdown so the planner can reason
+  // about them. Never export password / hidden values. For anything else
+  // classified sensitive, mint an "available but invisible" token instead
+  // of the raw value — the LLM can still plan a fill against it, but the
+  // real value never leaves this content script (see secureTokens.ts).
   let valueAttr: string | null = null
   if (tag === 'input' || tag === 'textarea') {
     const skipTypes = new Set(['password', 'hidden', 'file', 'submit', 'button', 'image', 'reset'])
@@ -130,7 +182,11 @@ function describeInteractive(el: Element, index: number): string | null {
           ? (el as HTMLTextAreaElement).value
           : (el as HTMLInputElement).value
       const clipped = cleanText(raw, 120)
-      if (clipped) valueAttr = `value=${clipped}`
+      if (clipped) {
+        valueAttr = classification
+          ? `value=${mintToken(classification.category, clipped, selector)}`
+          : `value=${clipped}`
+      }
     }
   } else if (tag === 'select') {
     const sel = el as HTMLSelectElement
@@ -138,13 +194,6 @@ function describeInteractive(el: Element, index: number): string | null {
     if (clipped) valueAttr = `value=${clipped}`
   }
 
-  // Prefer real CSS; fall back to index hint (resolved in actions.ts, not querySelector).
-  let selector: string
-  if (el.id) selector = `#${CSS.escape(el.id)}`
-  else if (name) selector = `${tag}[name="${CSS.escape(name)}"]`
-  else if (aria) selector = `${tag}[aria-label="${CSS.escape(aria)}"]`
-  else if (placeholder) selector = `${tag}[placeholder="${CSS.escape(placeholder)}"]`
-  else selector = `${tag}:nth-of-type-hint(${index})`
   const meta = [
     tag + id,
     type ? `type=${type}` : null,
@@ -163,7 +212,19 @@ function describeInteractive(el: Element, index: number): string | null {
   return `- ${meta}`
 }
 
-export function documentToMarkdown(doc: Document = document): string {
+export interface MarkdownResult {
+  markdown: string
+  tokensIssued: number
+  hiddenNodesFiltered: FilteredNode[]
+}
+
+export function documentToMarkdownDetailed(doc: Document = document): MarkdownResult {
+  // Fresh observation invalidates prior tokens / plan-time signatures —
+  // both are only ever meant to be trusted against THIS snapshot.
+  resetTokenStore()
+  resetPlanSignatures()
+  const hiddenNodesFiltered: FilteredNode[] = []
+
   const title = doc.title || 'Untitled'
   const url = doc.location?.href || ''
   const lines: string[] = [`# ${title}`, '', `URL: ${url}`, '']
@@ -171,16 +232,14 @@ export function documentToMarkdown(doc: Document = document): string {
   const products = extractProductCards(doc)
   if (products.length) {
     lines.push('## Product / result listings (title + price)', '')
-    lines.push(
-      'Use these rows as primary evidence for shopping or comparison tasks.',
-    )
+    lines.push('Use these rows as primary evidence for shopping or comparison tasks.')
     lines.push('')
     lines.push(...products)
     lines.push('')
   }
 
   lines.push('## Visible text', '')
-  const bodyText = extractVisibleText(doc)
+  const bodyText = extractVisibleText(doc, hiddenNodesFiltered)
   lines.push(bodyText || '_No visible text._')
   lines.push('', '## Interactive elements', '')
 
@@ -201,7 +260,12 @@ export function documentToMarkdown(doc: Document = document): string {
     lines.push('_No interactive elements found._')
   }
 
-  return lines.join('\n')
+  return { markdown: lines.join('\n'), tokensIssued: tokenCount(), hiddenNodesFiltered }
+}
+
+/** Back-compat plain-string wrapper for any caller that only wants the text. */
+export function documentToMarkdown(doc: Document = document): string {
+  return documentToMarkdownDetailed(doc).markdown
 }
 
 /** Prefer id / name / aria when building a usable CSS selector for actions. */
