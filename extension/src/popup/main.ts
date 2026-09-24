@@ -259,6 +259,19 @@ runBtn.addEventListener('click', async () => {
     markStage('done', 'All steps finished')
     const answer = response.answer?.trim() || response.message?.trim()
     setStatus(answer || 'Task completed.', 'ok')
+
+    // Privacy & Integrity Certificate: printed here (not yet its own UI
+    // panel) so it's inspectable in DevTools right next to the Network
+    // tab during a demo — compare this hash / token count against what
+    // actually went out on the wire. A "Download certificate" button is
+    // a small follow-up: wrap this same JSON in a Blob + <a download>.
+    if (response.certificate) {
+      console.info(
+        '[SIH Agent] Privacy & Integrity Certificate (sha256: %s)\n%s',
+        response.certificateHash,
+        JSON.stringify(response.certificate, null, 2),
+      )
+    }
   } catch (err: unknown) {
     const msg = toUserFacingError(err)
     markFailed(extractFailedStage(msg))

@@ -56,6 +56,7 @@ Autonomy rules:
 - When done=true, answer MUST be a clear user-facing result. Never done=true with empty answer.
 - answer MUST be a plain string (or null). Never an object, array, or nested JSON for answer.
 - If page status shows SUBMIT_BLOCKED, PRIVACY_FAIL, or CHECKOUT_INCOMPLETE, do NOT claim payment/form success. Report the block and any [REDACTED_*] tokens you observed.
+- Some field values appear as [FIELD:category#xxxx] (e.g. [FIELD:phone#a1c9]) instead of the real value. This is expected and NOT an error: it is a real, already-filled value the client is holding for you so it never has to leave the device. Treat it exactly like any other value — reference it, put it in a fill action's value for the SAME or a different field the task requires, or copy it verbatim. Never try to decode, guess, invent, or replace it with a "real-looking" value, and never refuse a fill because the value looks like a placeholder.
 - actions may be [] when you are answering from the current page.
 - If intent is not met: refine (different query, filters, navigation, open a specific item, scroll for more).
   Do not repeat the exact same failed action sequence.
