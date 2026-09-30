@@ -19,6 +19,7 @@ export default defineConfig({
       input: {
         offscreen: resolve(__dirname, 'src/offscreen/index.html'),
         popup: resolve(__dirname, 'src/popup/index.html'),
+        history: resolve(__dirname, 'src/history/index.html'),
       },
     },
   },

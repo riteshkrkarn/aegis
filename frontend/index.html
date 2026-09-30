@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aegis — status</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0f14;
+        --ink: #e8eef7;
+        --muted: #8b9bb0;
+        --accent: #3dd6c6;
+        --panel: #141b24;
+        --border: #243041;
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(1200px 600px at 10% -10%, #16324a 0%, transparent 55%),
+          radial-gradient(900px 500px at 100% 0%, #1a3a32 0%, transparent 50%),
+          var(--bg);
+        color: var(--ink);
+        display: grid;
+        place-items: center;
+        padding: 32px 20px;
+      }
+      main {
+        width: min(560px, 100%);
+        background: color-mix(in srgb, var(--panel) 88%, transparent);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 28px 24px;
+        backdrop-filter: blur(8px);
+      }
+      .brand {
+        color: var(--accent);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      h1 { margin: 8px 0 6px; font-size: 28px; }
+      p { color: var(--muted); margin: 0 0 18px; }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 0;
+        border-top: 1px solid var(--border);
+        font-size: 14px;
+      }
+      .ok { color: #5dde8a; }
+      .bad { color: #ff6b6b; }
+      code { color: var(--ink); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="brand">Aegis / SIH26171</p>
+      <h1>Agent API status</h1>
+      <p>Optional web surface for the FastAPI backend. The Chrome extension remains the primary client.</p>
+      <div class="row"><span>Health</span><span id="health">checking…</span></div>
+      <div class="row"><span>Endpoint</span><code id="endpoint">http://127.0.0.1:8001</code></div>
+      <div class="row"><span>Privacy debug</span><span id="debug">—</span></div>
+    </main>
+    <script>
+      const API = 'http://127.0.0.1:8001'
+      document.getElementById('endpoint').textContent = API
+      fetch(API + '/health')
+        .then((r) => r.json())
+        .then((data) => {
+          const el = document.getElementById('health')
+          el.textContent = data.status === 'ok' ? 'ok' : 'degraded'
+          el.className = data.status === 'ok' ? 'ok' : 'bad'
+          document.getElementById('debug').textContent = data.privacy_debug || '—'
+        })
+        .catch(() => {
+          const el = document.getElementById('health')
+          el.textContent = 'unreachable'
+          el.className = 'bad'
+        })
+    </script>
+  </body>
+</html>

@@ -67,15 +67,15 @@ Logged in chatbot-style session history
 
 | Area | Notes |
 |------|--------|
-| Real Transformers.js VLM masking | Replace placeholder with screenshot-aware redaction |
-| Local vs server routing | Decide light vs heavy; run light tasks on local VLM |
-| Multi-step agent loop + error handling | Retry, re-observe page, stop conditions |
-| Session history UX | Popup opens chatbot-style page with all sessions |
-| Model selection | Pick local VLM + server open-weight model |
-| Agentic server features | Deeper FastAPI tooling / planning |
-| Eval / edge cases | Correctness suite |
-| `frontend/` web app | Deferred |
-| Firefox | Deferred |
+| Real Transformers.js VLM masking | Done (SmolVLM + regex) |
+| Local vs server routing | Done — light on-device planner, heavy → FastAPI |
+| Multi-step agent loop + error handling | Done — retry, re-observe, stop conditions |
+| Session history UX | Done — History page from popup |
+| Model selection | Criteria in `docs/MODEL_SELECTION.md` |
+| Agentic server features | Done — `POST /agent/tool` |
+| Eval / edge cases | Done — `scripts/eval_suite.py` |
+| `frontend/` web app | Minimal status page |
+| Firefox | Notes only (`docs/FIREFOX.md`) |
 
 ---
 

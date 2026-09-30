@@ -148,6 +148,12 @@ select {
   transition: all var(--transition);
 }
 
+.topbar-actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 .close-btn:hover {
   background: var(--panel-hover);
   color: var(--ink);

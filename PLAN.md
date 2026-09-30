@@ -53,14 +53,14 @@ User task
 
 ### Left
 - [x] Wire a real **Transformers.js VLM** for screenshot-aware PII masking (SmolVLM-256M in offscreen; regex fallback remains)
-- [ ] Harden JSON action schema, multi-step loops, and error recovery
-- [ ] Easy vs difficult **routing** (local VLM vs server)  -  criteria TBD
-- [ ] Session history UX: popup → chatbot-style page with all past sessions
-- [ ] Choose / evaluate optimal local VLM + server model
-- [ ] Richer agentic server workflows (tools, planning loops) on FastAPI
-- [ ] Eval set / edge-case suite for correctness
-- [ ] Optional `frontend/` web app
-- [ ] Firefox (if ever required)
+- [x] Harden JSON action schema, multi-step loops, and error recovery
+- [x] Easy vs difficult **routing** (local light planner vs server)
+- [x] Session history UX: popup → chatbot-style page with all past sessions
+- [x] Choose / evaluate optimal local VLM + server model (criteria in `docs/MODEL_SELECTION.md`)
+- [x] Richer agentic server workflows (`POST /agent/tool` helpers on FastAPI)
+- [x] Eval set / edge-case suite (`backend/scripts/eval_suite.py`)
+- [x] Optional `frontend/` status page
+- [x] Firefox notes (`docs/FIREFOX.md`) — implementation deferred
 
 ---
 

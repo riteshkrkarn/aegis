@@ -21,6 +21,7 @@ const modelEl = document.getElementById('model') as HTMLSelectElement
 const modelHintEl = document.getElementById('model-hint') as HTMLSpanElement
 const runBtn = document.getElementById('run') as HTMLButtonElement
 const closeBtn = document.getElementById('close') as HTMLButtonElement
+const historyBtn = document.getElementById('history') as HTMLButtonElement
 const statusEl = document.getElementById('status') as HTMLParagraphElement
 const spinnerEl = document.getElementById('spinner') as HTMLElement
 const progressLabelEl = document.getElementById('progress-label') as HTMLParagraphElement
@@ -225,6 +226,11 @@ closeBtn.addEventListener('click', () => {
   void savePanelBounds().finally(() => window.close())
 })
 
+historyBtn.addEventListener('click', () => {
+  const url = chrome.runtime.getURL('src/history/index.html')
+  void chrome.tabs.create({ url })
+})
+
 runBtn.addEventListener('click', async () => {
   const task = taskEl.value.trim()
   if (!task) {
@@ -258,7 +264,8 @@ runBtn.addEventListener('click', async () => {
 
     markStage('done', 'All steps finished')
     const answer = response.answer?.trim() || response.message?.trim()
-    setStatus(answer || 'Task completed.', 'ok')
+    const plannerNote = response.planner === 'local' ? ' (on-device planner)' : ''
+    setStatus((answer || 'Task completed.') + plannerNote, 'ok')
 
     // Privacy & Integrity Certificate: printed here (not yet its own UI
     // panel) so it's inspectable in DevTools right next to the Network

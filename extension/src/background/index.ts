@@ -21,8 +21,12 @@ import {
   parseInteractiveShapeFromMarkdown,
   extractSensitiveSelectorsFromMarkdown,
 } from '../lib/skillMemory'
+import { classifyTaskDifficulty } from '../lib/routing'
+import { planLightTaskLocally } from '../lib/localPlanner'
+import { saveSession } from '../lib/sessionHistory'
 import type {
   AgentAction,
+  AgentRunResponse,
   HiddenNodeLog,
   MaskMethod,
   PipelineMessage,
@@ -31,6 +35,15 @@ import type {
 } from '../lib/types'
 
 const MAX_AGENT_STEPS = 8
+/** Stop the loop if this many turns in a row make no progress. */
+const MAX_NO_PROGRESS_TURNS = 3
+
+const FAILURE_RESULT_RE =
+  /\b(blocked|no element|failed|error|requires |invalid|timeout|could not)\b/i
+
+function resultsIndicateFailure(results: string[]): boolean {
+  return results.some((r) => FAILURE_RESULT_RE.test(r))
+}
 
 async function getActiveTab(): Promise<chrome.tabs.Tab> {
   // Prefer the last-focused normal browser window's active tab.
@@ -132,11 +145,17 @@ interface Observation {
   hiddenNodesFiltered: HiddenNodeLog[]
 }
 
-async function observePage(tabId: number, windowId: number, step: number): Promise<Observation> {
+async function observePage(
+  tabId: number,
+  windowId: number,
+  step: number,
+  opts?: { useVlm?: boolean },
+): Promise<Observation> {
   const tab = await chrome.tabs.get(tabId)
 
   // Always re-capture so each planning turn verifies the current viewport.
-  // Full VLM only on first turn; later turns use screenshot + regex mask (faster).
+  // Full VLM on first turn (and when caller requests remask after navigate/fill).
+  const useVlm = opts?.useVlm ?? step === 0
   emitProgress(
     'capture',
     step === 0 ? 'Capturing the page…' : `Re-capturing page (verify step ${step + 1})…`,
@@ -148,7 +167,7 @@ async function observePage(tabId: number, windowId: number, step: number): Promi
   emitProgress('markdown', 'Reading page structure…')
   const md = await requestMarkdown(tabId)
 
-  if (step === 0) {
+  if (useVlm) {
     const warm = await chrome.storage.session.get('privacyModelReady')
     emitProgress(
       'model_download',
@@ -159,7 +178,7 @@ async function observePage(tabId: number, windowId: number, step: number): Promi
   }
 
   const masked = await maskPiiWithLocalVlm(screenshot, md.markdown, {
-    useVlm: step === 0,
+    useVlm,
   })
   emitProgress('mask', 'Privacy mask applied')
 
@@ -186,6 +205,7 @@ export interface PipelineResult {
   actions: AgentAction[]
   answer?: string
   maskMethod: MaskMethod
+  planner: 'server' | 'local'
   certificate?: unknown
   certificateHash?: string
 }
@@ -200,12 +220,15 @@ async function runTaskPipeline(task: string, modelId?: string): Promise<Pipeline
   const ledger = new IntegrityLedger(task)
   const allActions: AgentAction[] = []
   const priorResults: string[] = []
+  const stepSummaries: { step: number; note: string }[] = []
   const sensitiveSelectorsSeen = new Set<string>()
   let priorReasoning = ''
   let lastMaskMethod: MaskMethod = 'placeholder'
   let finalAnswer = ''
   let pendingAnswer = ''
   let usedSkillReplay = false
+  let planner: 'server' | 'local' = 'server'
+  let noProgressTurns = 0
 
   try {
     // ---- Muscle Memory: try a verified, PII-free recipe before ever
@@ -225,7 +248,54 @@ async function runTaskPipeline(task: string, modelId?: string): Promise<Pipeline
     const skill = await findSkill(domain, task, fingerprint)
     let step0AlreadyRecorded = false
 
-    if (skill) {
+    // Phase 3: light tasks plan on-device after the first masked observation.
+    const difficulty = classifyTaskDifficulty(task, firstObserved.maskedMarkdown)
+    if (!skill && difficulty === 'light') {
+      planner = 'local'
+      emitProgress('server', 'Light task — planning on-device…')
+      const localPlan = planLightTaskLocally(
+        task,
+        firstObserved.maskedMarkdown,
+        firstObserved.url,
+      )
+      priorReasoning = localPlan.reasoning || priorReasoning
+      const turnAnswer = localPlan.answer?.trim() || ''
+      if (turnAnswer) pendingAnswer = turnAnswer
+      allActions.push(...(localPlan.actions || []))
+      stepSummaries.push({ step: 0, note: `local plan: ${localPlan.reasoning || 'light'}` })
+
+      await ledger.recordStep({
+        step: 0,
+        beforeMarkdown: firstObserved.beforeMarkdown,
+        afterMarkdown: firstObserved.maskedMarkdown,
+        tokensIssued: firstObserved.tokensIssued,
+        hiddenNodesFiltered: firstObserved.hiddenNodesFiltered,
+        witnessChecks: [],
+        skillReplayed: false,
+      })
+      step0AlreadyRecorded = true
+
+      if (localPlan.actions?.length) {
+        stage = 'execute'
+        emitProgress('execute', `Running ${localPlan.actions.length} local action(s)…`)
+        const outcome = await executeActionsSafely(tabId, localPlan.actions)
+        priorResults.push(...outcome.results)
+        if (resultsIndicateFailure(outcome.results)) {
+          priorResults.push(
+            'local action failed — falling through to server verify/repair',
+          )
+          planner = 'server'
+        } else if (localPlan.done && pendingAnswer) {
+          finalAnswer = pendingAnswer
+          usedSkillReplay = true // skip normal multi-step; still may final-verify below if empty
+        }
+      } else if (localPlan.done && pendingAnswer) {
+        finalAnswer = pendingAnswer
+        usedSkillReplay = true
+      }
+    }
+
+    if (skill && !finalAnswer) {
       const selectors = skill.steps
         .map((s) => ('selector' in s ? s.selector : undefined))
         .filter((s): s is string => Boolean(s))
@@ -255,8 +325,9 @@ async function runTaskPipeline(task: string, modelId?: string): Promise<Pipeline
         priorResults.push(...outcome.results)
         priorResults.push('replayed from Muscle Memory  -  re-observe and verify before answering')
         usedSkillReplay = true
+        stepSummaries.push({ step: 0, note: 'skill replay' })
       }
-    } else {
+    } else if (!step0AlreadyRecorded) {
       await ledger.recordStep({
         step: 0,
         beforeMarkdown: firstObserved.beforeMarkdown,
@@ -269,8 +340,8 @@ async function runTaskPipeline(task: string, modelId?: string): Promise<Pipeline
     }
 
     // ---- Normal per-step observe -> plan -> execute loop, skipped
-    // entirely when a skill replay above already produced actions.
-    if (!usedSkillReplay) {
+    // entirely when a skill replay / local light plan already finished.
+    if (!usedSkillReplay && !finalAnswer) {
       for (let step = 0; step < MAX_AGENT_STEPS; step++) {
         const isLastPlan = step === MAX_AGENT_STEPS - 1
         stage = 'capture'
@@ -283,7 +354,13 @@ async function runTaskPipeline(task: string, modelId?: string): Promise<Pipeline
               : `Observe → verify → plan (step ${step + 1}/${MAX_AGENT_STEPS})…`,
         )
 
-        const observed = step === 0 ? firstObserved : await observePage(tabId, windowId, step)
+        const needVlmRemask = priorResults.some((r) =>
+          /\b(navigated|fill|filled)\b/i.test(r),
+        )
+        const observed =
+          step === 0
+            ? firstObserved
+            : await observePage(tabId, windowId, step, { useVlm: needVlmRemask })
         lastMaskMethod = observed.maskMethod
         for (const sel of extractSensitiveSelectorsFromMarkdown(observed.beforeMarkdown)) {
           sensitiveSelectorsSeen.add(sel)
@@ -298,18 +375,48 @@ async function runTaskPipeline(task: string, modelId?: string): Promise<Pipeline
               ? 'Planning first actions…'
               : `Verifying intent & planning (step ${step + 1})…`,
         )
-        const serverResult = await runAgentOnServer({
-          task,
-          page_markdown: observed.maskedMarkdown,
-          page_url: observed.url,
-          step_index: step,
-          prior_results: priorResults,
-          prior_reasoning: priorReasoning,
-          model_id: modelId,
-          force_answer: isLastPlan,
-          debug_before_markdown: observed.beforeMarkdown,
-          mask_method: observed.maskMethod,
-        })
+
+        let serverResult: AgentRunResponse
+        try {
+          serverResult = await runAgentOnServer({
+            task,
+            page_markdown: observed.maskedMarkdown,
+            page_url: observed.url,
+            step_index: step,
+            prior_results: priorResults,
+            prior_reasoning: priorReasoning,
+            model_id: modelId,
+            force_answer: isLastPlan,
+            debug_before_markdown: observed.beforeMarkdown,
+            mask_method: observed.maskMethod,
+          })
+        } catch (err) {
+          // One client-side retry on provider/parse failure, then stop gracefully.
+          const msg = err instanceof Error ? err.message : String(err)
+          priorResults.push(`planner error (retry once): ${msg.slice(0, 160)}`)
+          emitProgress('server', 'Planner error — retrying once…')
+          try {
+            serverResult = await runAgentOnServer({
+              task,
+              page_markdown: observed.maskedMarkdown,
+              page_url: observed.url,
+              step_index: step,
+              prior_results: priorResults,
+              prior_reasoning: priorReasoning,
+              model_id: modelId,
+              force_answer: true,
+              debug_before_markdown: observed.beforeMarkdown,
+              mask_method: observed.maskMethod,
+            })
+          } catch (err2) {
+            finalAnswer =
+              `Stopped: planning failed after retry. ${
+                err2 instanceof Error ? err2.message : String(err2)
+              }`
+            stepSummaries.push({ step, note: 'planner failed after retry' })
+            break
+          }
+        }
 
         priorReasoning = serverResult.reasoning || priorReasoning
         const turnAnswer = serverResult.answer?.trim() || ''
@@ -321,15 +428,18 @@ async function runTaskPipeline(task: string, modelId?: string): Promise<Pipeline
 
         if (serverResult.done && pendingAnswer && !hasActions) {
           finalAnswer = pendingAnswer
+          stepSummaries.push({ step, note: 'done with answer' })
           break
         }
 
         if (!hasActions) {
+          noProgressTurns += 1
           priorResults.push(
             serverResult.done
               ? 'done claimed without actions/answer  -  continue observe/verify'
               : 'no actions  -  continue observe/verify against intent',
           )
+          stepSummaries.push({ step, note: 'no actions — re-observe' })
           if (step > 0 || !step0AlreadyRecorded) {
             await ledger.recordStep({
               step,
@@ -340,6 +450,12 @@ async function runTaskPipeline(task: string, modelId?: string): Promise<Pipeline
               witnessChecks: [],
             })
           }
+          if (noProgressTurns >= MAX_NO_PROGRESS_TURNS) {
+            finalAnswer =
+              pendingAnswer ||
+              'Stopped: no progress after several observe/plan turns. Check the page or rephrase the task.'
+            break
+          }
           continue
         }
 
@@ -348,15 +464,48 @@ async function runTaskPipeline(task: string, modelId?: string): Promise<Pipeline
           'execute',
           `Running ${serverResult.actions!.length} action(s) (step ${step + 1})…`,
         )
-        const outcome = await executeActionsSafely(tabId, serverResult.actions!)
+        let outcome
+        try {
+          outcome = await executeActionsSafely(tabId, serverResult.actions!)
+        } catch (execErr) {
+          const emsg = execErr instanceof Error ? execErr.message : String(execErr)
+          priorResults.push(`action execution error: ${emsg.slice(0, 200)}`)
+          priorResults.push('re-observe after failed execution before planning again')
+          noProgressTurns += 1
+          stepSummaries.push({ step, note: `execute error: ${emsg.slice(0, 80)}` })
+          if (noProgressTurns >= MAX_NO_PROGRESS_TURNS) {
+            finalAnswer =
+              pendingAnswer ||
+              `Stopped after repeated action failures: ${emsg.slice(0, 200)}`
+            break
+          }
+          await new Promise((r) => setTimeout(r, 500))
+          continue
+        }
+
         priorResults.push(...outcome.results)
-        priorResults.push(
-          pendingAnswer
-            ? `after actions: re-observe and VERIFY against intent before accepting any answer (tentative: ${pendingAnswer.slice(0, 160)})`
-            : 'after actions: re-observe and VERIFY whether the page now matches user intent',
-        )
-        if (!(serverResult.done && pendingAnswer)) {
+        const failed = resultsIndicateFailure(outcome.results)
+        if (failed) {
+          noProgressTurns += 1
+          priorResults.push(
+            'one or more actions failed/blocked — re-observe and choose a different plan',
+          )
           pendingAnswer = ''
+          stepSummaries.push({ step, note: 'action failed — re-observe' })
+        } else {
+          noProgressTurns = 0
+          priorResults.push(
+            pendingAnswer
+              ? `after actions: re-observe and VERIFY against intent before accepting any answer (tentative: ${pendingAnswer.slice(0, 160)})`
+              : 'after actions: re-observe and VERIFY whether the page now matches user intent',
+          )
+          if (!(serverResult.done && pendingAnswer)) {
+            pendingAnswer = ''
+          }
+          stepSummaries.push({
+            step,
+            note: `executed ${serverResult.actions!.length} action(s)`,
+          })
         }
 
         if (step > 0 || !step0AlreadyRecorded) {
@@ -370,6 +519,13 @@ async function runTaskPipeline(task: string, modelId?: string): Promise<Pipeline
           })
         }
 
+        if (failed && noProgressTurns >= MAX_NO_PROGRESS_TURNS) {
+          finalAnswer =
+            pendingAnswer ||
+            'Stopped: actions kept failing. The page may have blocked the agent or selectors changed.'
+          break
+        }
+
         await new Promise((r) => setTimeout(r, 700))
       }
     }
@@ -377,26 +533,35 @@ async function runTaskPipeline(task: string, modelId?: string): Promise<Pipeline
     // Guaranteed final answer pass — reused for BOTH the skill-replay
     // path and the normal loop, so a replay is confirmed the same way a
     // fresh plan would be, never trusted blindly.
+    // Successful on-device light plans already set finalAnswer and skip this.
     if (!finalAnswer) {
       stage = 'capture'
       emitProgress('server', 'Final verify  -  writing answer…')
       const observed = await observePage(tabId, windowId, MAX_AGENT_STEPS)
       lastMaskMethod = observed.maskMethod
       stage = 'server'
-      const serverResult = await runAgentOnServer({
-        task,
-        page_markdown: observed.maskedMarkdown,
-        page_url: observed.url,
-        step_index: MAX_AGENT_STEPS,
-        prior_results: priorResults,
-        prior_reasoning: priorReasoning,
-        model_id: modelId,
-        force_answer: true,
-        debug_before_markdown: observed.beforeMarkdown,
-        mask_method: observed.maskMethod,
-      })
-      const turnAnswer = serverResult.answer?.trim() || ''
-      finalAnswer = turnAnswer || pendingAnswer
+      try {
+        const serverResult = await runAgentOnServer({
+          task,
+          page_markdown: observed.maskedMarkdown,
+          page_url: observed.url,
+          step_index: MAX_AGENT_STEPS,
+          prior_results: priorResults,
+          prior_reasoning: priorReasoning,
+          model_id: modelId,
+          force_answer: true,
+          debug_before_markdown: observed.beforeMarkdown,
+          mask_method: observed.maskMethod,
+        })
+        const turnAnswer = serverResult.answer?.trim() || ''
+        finalAnswer = turnAnswer || pendingAnswer
+      } catch (err) {
+        finalAnswer =
+          pendingAnswer ||
+          `Task stopped during final answer: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+      }
       await ledger.recordStep({
         step: MAX_AGENT_STEPS,
         beforeMarkdown: observed.beforeMarkdown,
@@ -405,13 +570,14 @@ async function runTaskPipeline(task: string, modelId?: string): Promise<Pipeline
         hiddenNodesFiltered: observed.hiddenNodesFiltered,
         witnessChecks: [],
       })
+      stepSummaries.push({ step: MAX_AGENT_STEPS, note: 'final verify' })
     }
 
     // Save what just worked as a new/updated recipe — but only a FRESH,
     // verified run, and only when every step can be made value-free.
     // A replayed run is never re-cached: it changes nothing, so there is
     // nothing new to learn from it.
-    if (!usedSkillReplay && finalAnswer) {
+    if (!usedSkillReplay && planner === 'server' && finalAnswer) {
       const steps = toSkillSteps(allActions, sensitiveSelectorsSeen)
       if (steps && steps.length) {
         const domain = domainOf(firstObserved.url)
@@ -424,19 +590,46 @@ async function runTaskPipeline(task: string, modelId?: string): Promise<Pipeline
 
     const { certificate, sha256 } = await ledger.toSignedExport()
 
+    const message = finalAnswer
+      ? finalAnswer
+      : 'Task finished, but the model did not return a final text answer.'
+
+    await saveSession({
+      task,
+      finalAnswer: message,
+      ok: Boolean(finalAnswer) && !/^Stopped:/i.test(finalAnswer),
+      maskMethod: lastMaskMethod,
+      planner,
+      actionCount: allActions.length,
+      steps: stepSummaries,
+      certificateHash: sha256,
+    })
+
     return {
       actions: allActions,
       answer: finalAnswer || undefined,
       maskMethod: lastMaskMethod,
-      message: finalAnswer
-        ? finalAnswer
-        : 'Task finished, but the model did not return a final text answer.',
+      planner,
+      message,
       certificate,
       certificateHash: sha256,
     }
   } catch (err) {
     console.error(`[SIH Agent] failed at stage=${stage}`, err)
     const friendly = toUserFacingError(err, stage)
+    try {
+      await saveSession({
+        task,
+        finalAnswer: friendly,
+        ok: false,
+        maskMethod: lastMaskMethod,
+        planner,
+        actionCount: allActions.length,
+        steps: stepSummaries,
+      })
+    } catch {
+      // history must not mask the original failure
+    }
     throw new Error(friendly.includes('(step:') ? friendly : `${friendly} (step: ${stage})`)
   }
 }
@@ -453,6 +646,7 @@ chrome.runtime.onMessage.addListener((message: PipelineMessage, _sender, sendRes
         actions: result.actions,
         answer: result.answer,
         maskMethod: result.maskMethod,
+        planner: result.planner,
         certificate: result.certificate,
         certificateHash: result.certificateHash,
       } satisfies PipelineMessage)

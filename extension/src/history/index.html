@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SIH Agent — Session history</title>
+    <link rel="stylesheet" href="./history.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="brand">SIH Agent</p>
+          <h1>Session history</h1>
+          <p class="sub">Sanitized task outcomes only — no screenshots or raw PII</p>
+        </div>
+        <div class="actions">
+          <button id="clear" type="button" class="ghost-btn">Clear all</button>
+          <button id="close" type="button" class="close-btn">Close</button>
+        </div>
+      </header>
+
+      <p id="empty" class="empty" hidden>No sessions yet. Run a task from the agent panel.</p>
+      <ul id="list" class="session-list" aria-live="polite"></ul>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

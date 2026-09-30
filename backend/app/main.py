@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .routes.agent import router as agent_router
+from .routes.tools import router as tools_router
 
 load_dotenv()
 
@@ -29,6 +30,7 @@ app.add_middleware(
 )
 
 app.include_router(agent_router)
+app.include_router(tools_router)
 
 
 @app.get('/health')

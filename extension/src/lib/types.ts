@@ -99,6 +99,7 @@ export type PipelineMessage =
       actions?: AgentAction[]
       answer?: string
       maskMethod?: MaskMethod
+      planner?: 'server' | 'local'
       certificate?: unknown
       certificateHash?: string
     }

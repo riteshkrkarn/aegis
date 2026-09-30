@@ -6,9 +6,13 @@ from typing import Any
 
 import httpx
 
-from .schemas import AgentAction, AgentRunResponse
+from .schemas import AgentAction, AgentRunResponse, normalize_action_type
 
 logger = logging.getLogger('sih.llm')
+
+JSON_REPAIR_PROMPT = """Your previous reply was not valid agent JSON. Reply again with ONLY a JSON object:
+{"actions":[...],"reasoning":"...","done":false,"answer":null}
+No markdown fences. Prefer 0–3 valid actions (click/fill/scroll/navigate/wait)."""
 
 GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
 OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
@@ -105,7 +109,12 @@ def _heuristic_actions(task: str, page_markdown: str) -> AgentRunResponse:
             else:
                 actions.append(AgentAction(action='click', selector='button[type="submit"]'))
         else:
-            actions.append(AgentAction(action='click', selector='button'))
+            # Prefer an id from the markdown interactive list over a bare tag.
+            md_id = re.search(r'selector=(#[A-Za-z][\w-]*)', page_markdown)
+            if md_id:
+                actions.append(AgentAction(action='click', selector=md_id.group(1)))
+            else:
+                actions.append(AgentAction(action='wait', amount=200))
     elif 'fill' in lower or 'type' in lower:
         value_match = re.search(r'["\']([^"\']+)["\']', task)
         value = value_match.group(1) if value_match else 'test'
@@ -114,7 +123,11 @@ def _heuristic_actions(task: str, page_markdown: str) -> AgentRunResponse:
                 AgentAction(action='fill', selector=f'#{id_match.group(1)}', value=value)
             )
         else:
-            actions.append(AgentAction(action='fill', selector='input', value=value))
+            md_input = re.search(r'selector=(#[A-Za-z][\w-]*)', page_markdown)
+            if md_input:
+                actions.append(AgentAction(action='fill', selector=md_input.group(1), value=value))
+            else:
+                actions.append(AgentAction(action='wait', amount=200))
     elif 'scroll' in lower:
         actions.append(AgentAction(action='scroll', amount=400))
     else:
@@ -152,6 +165,69 @@ def _as_plain_string(value: Any) -> str | None:
     return str(value)
 
 
+def _sanitize_action_dict(raw: Any) -> dict[str, Any] | None:
+    """Normalize one action dict; return None if it cannot be made valid."""
+    if not isinstance(raw, dict):
+        return None
+    action_raw = raw.get('action') or raw.get('type') or raw.get('name')
+    action = normalize_action_type(action_raw)
+    if action is None:
+        return None
+
+    # Terminal pseudo-actions belong in done/answer, not the actions list.
+    if isinstance(action_raw, str) and action_raw.strip().lower() in {
+        'done',
+        'answer',
+        'finish',
+        'complete',
+    }:
+        return None
+
+    item: dict[str, Any] = {'action': action}
+    selector = raw.get('selector') or raw.get('css') or raw.get('target')
+    if isinstance(selector, str) and selector.strip():
+        item['selector'] = selector.strip()
+    value = raw.get('value')
+    if value is None:
+        value = raw.get('text')
+    if value is not None:
+        item['value'] = value if isinstance(value, str) else str(value)
+    url = raw.get('url') or raw.get('href')
+    if isinstance(url, str) and url.strip():
+        item['url'] = url.strip()
+    amount = raw.get('amount')
+    if amount is None:
+        amount = raw.get('ms') or raw.get('pixels') or raw.get('y')
+    if amount is not None:
+        try:
+            item['amount'] = float(amount)
+        except (TypeError, ValueError):
+            pass
+    return item
+
+
+def _coerce_actions_list(actions: Any) -> list[dict[str, Any]]:
+    if actions is None:
+        return []
+    if isinstance(actions, dict):
+        actions = [actions]
+    if not isinstance(actions, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for raw in actions:
+        item = _sanitize_action_dict(raw)
+        if item is None:
+            continue
+        try:
+            validated = AgentAction.model_validate(item)
+            out.append(validated.model_dump(exclude_none=True))
+        except Exception:
+            # Drop invalid actions rather than failing the whole turn.
+            logger.info('dropping invalid action: %r', item)
+            continue
+    return out
+
+
 def _coerce_model_payload(parsed: Any) -> dict[str, Any]:
     """Normalize LLM JSON so schema validation rarely 502s on shape drift."""
     if not isinstance(parsed, dict):
@@ -159,20 +235,22 @@ def _coerce_model_payload(parsed: Any) -> dict[str, Any]:
 
     out: dict[str, Any] = dict(parsed)
 
-    actions = out.get('actions')
-    if actions is None:
-        out['actions'] = []
-    elif isinstance(actions, dict):
-        out['actions'] = [actions]
-    elif not isinstance(actions, list):
-        out['actions'] = []
+    out['actions'] = _coerce_actions_list(out.get('actions'))
 
-    if 'answer' in out:
-        out['answer'] = _as_plain_string(out.get('answer'))
+    if 'answer' in out or 'response' in out or 'final_answer' in out or 'message' in out:
+        answer = out.get('answer')
+        if answer in (None, ''):
+            answer = out.get('response') or out.get('final_answer') or out.get('message')
+        out['answer'] = _as_plain_string(answer)
     if 'reasoning' in out:
         out['reasoning'] = _as_plain_string(out.get('reasoning'))
 
     done = out.get('done')
+    if done is None:
+        for key in ('finished', 'complete', 'is_done', 'task_complete'):
+            if key in out:
+                done = out[key]
+                break
     if isinstance(done, str):
         out['done'] = done.strip().lower() in {'1', 'true', 'yes', 'on'}
     elif done is None:
@@ -348,55 +426,85 @@ async def plan_actions(
     if 'openai.com' in api_url or 'groq.com' in api_url:
         payload['response_format'] = {'type': 'json_object'}
 
-    try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            response = await client.post(
-                api_url,
-                headers={
-                    'Authorization': f'Bearer {api_key}',
-                    'Content-Type': 'application/json',
-                },
-                json=payload,
-            )
-            if not response.is_success:
-                body_preview = (response.text or '')[:500]
-                logger.error(
-                    'plan_actions http_error status=%s model=%s body=%r',
-                    response.status_code,
-                    model,
-                    body_preview,
+    async def _chat_once(messages: list[dict[str, str]]) -> dict[str, Any]:
+        body = {**payload, 'messages': messages}
+        try:
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                response = await client.post(
+                    api_url,
+                    headers={
+                        'Authorization': f'Bearer {api_key}',
+                        'Content-Type': 'application/json',
+                    },
+                    json=body,
                 )
-            response.raise_for_status()
-            data = response.json()
-    except httpx.HTTPStatusError as exc:
-        raise _friendly_http_error(exc, model) from exc
-    except httpx.TimeoutException as exc:
-        logger.error('plan_actions timeout model=%s', model)
-        raise LlmProviderError('Language model request timed out. Please try again.') from exc
-    except httpx.RequestError as exc:
-        logger.error('plan_actions request_error model=%s err=%s', model, exc)
-        raise LlmProviderError('Could not reach the language model provider.') from exc
+                if not response.is_success:
+                    body_preview = (response.text or '')[:500]
+                    logger.error(
+                        'plan_actions http_error status=%s model=%s body=%r',
+                        response.status_code,
+                        model,
+                        body_preview,
+                    )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as exc:
+            raise _friendly_http_error(exc, model) from exc
+        except httpx.TimeoutException as exc:
+            logger.error('plan_actions timeout model=%s', model)
+            raise LlmProviderError('Language model request timed out. Please try again.') from exc
+        except httpx.RequestError as exc:
+            logger.error('plan_actions request_error model=%s err=%s', model, exc)
+            raise LlmProviderError('Could not reach the language model provider.') from exc
 
-    try:
-        content = data['choices'][0]['message']['content']
-        parsed = _coerce_model_payload(_parse_model_json(content))
-        result = _normalize_result(
-            AgentRunResponse.model_validate(parsed),
-            force_answer=force_answer,
-        )
-        logger.info(
-            'plan_actions parsed_ok actions=%d done=%s answer=%r',
-            len(result.actions),
-            result.done,
-            (result.answer or '')[:160],
-        )
-        return result
-    except Exception as exc:
-        # Includes pydantic ValidationError, KeyError, JSON errors, etc.
-        logger.exception(
-            'plan_actions parse_error content_preview=%r',
-            str(data.get('choices', data))[:400] if isinstance(data, dict) else str(data)[:400],
-        )
-        raise LlmProviderError(
-            'The language model returned an unexpected response. Please try again.'
-        ) from exc
+    messages: list[dict[str, str]] = [
+        {'role': 'system', 'content': system},
+        {'role': 'user', 'content': user_content},
+    ]
+
+    data = await _chat_once(messages)
+    last_error: Exception | None = None
+
+    for attempt in range(2):
+        try:
+            content = data['choices'][0]['message']['content']
+            parsed = _coerce_model_payload(_parse_model_json(content))
+            result = _normalize_result(
+                AgentRunResponse.model_validate(parsed),
+                force_answer=force_answer,
+            )
+            logger.info(
+                'plan_actions parsed_ok attempt=%d actions=%d done=%s answer=%r',
+                attempt + 1,
+                len(result.actions),
+                result.done,
+                (result.answer or '')[:160],
+            )
+            return result
+        except Exception as exc:
+            last_error = exc
+            logger.warning(
+                'plan_actions parse_error attempt=%d preview=%r',
+                attempt + 1,
+                str(data.get('choices', data))[:400] if isinstance(data, dict) else str(data)[:400],
+            )
+            if attempt == 0:
+                # One repair retry with a short corrective prompt.
+                bad = ''
+                try:
+                    bad = str(data['choices'][0]['message']['content'])[:1200]
+                except Exception:
+                    bad = ''
+                repair_messages = [
+                    *messages,
+                    {'role': 'assistant', 'content': bad or '{"actions":[]}'},
+                    {'role': 'user', 'content': JSON_REPAIR_PROMPT},
+                ]
+                data = await _chat_once(repair_messages)
+                continue
+            break
+
+    logger.exception('plan_actions parse_failed_after_retry')
+    raise LlmProviderError(
+        'The language model returned an unexpected response. Please try again.'
+    ) from last_error
